@@ -1,0 +1,93 @@
+/* Just a few styles to make the panels look a little "nicer" */
+ApplicationControlBar
+{
+	cornerRadius: 0;
+	horizontalGap: 4;
+	paddingLeft: 1;
+	paddingRight: 1;
+	paddingTop: 1;
+	paddingBottom: 1;
+}
+MenuBar {
+	highlightAlphas: 0.52, 0.4;
+	fillAlphas: .5,.4;
+   	fillColors: #e0e0e0, #c0c0c0;
+	fontWeight: bold;
+	cornerRadius: 0;
+	borderStyle: none;
+}
+Menu {
+	fontWeight: normal;
+}
+
+Panel { 
+	headerHeight: 20;
+
+	highlightAlphas: 0.52, 0.4;
+	fillAlphas: .5,.5,.5,.5;
+   	fillColors: #e0e0e0, #c0c0c0;
+	
+	leftPadding: 2;
+	rightPadding: 2;
+	topPadding: 2;
+	bottomPadding: 2;
+		   
+	headerColors: #c0c0c0, #a0a0a0;
+	footerColors: #c0c0c0, #a0a0a0;
+	borderThicknessLeft: 2;
+	borderThicknessRight: 2;
+	borderThicknessBottom: 2;
+	backgroundColor: #FFFFFF;
+} 
+
+Button {
+	highlightAlphas: 0.5, 0.3;
+}
+
+Application { 
+	headerHeight: 25;
+	borderThickness: 0;
+	roundedBottomCorners: true;
+	
+	borderAlpha: 1;
+	highlightAlphas: 0.52, .3;
+		   
+	titleBarColors: #e0e0e0, #c0c0c0;
+	backgroundColor: white;	
+	titleStyleName: "firefoxLikeTabs";
+	backgroundGradientAlphas: 1.0, 1.0;
+	backgroundGradientColors: #E0E0E0, #C0C0C0;
+	paddingBottom: 2;
+	paddingLeft: 2;
+	paddingRight: 2;
+	paddingTop: 2;
+} 
+
+WindowedApplication { 
+	borderAlpha: 1;
+	highlightAlphas: 0.52, .3;
+	titleBarColors: #c0c0c0, #e0e0e0;
+	paddingBottom: 2;
+	paddingLeft: 2;
+	paddingRight: 2;
+	paddingTop: 2;
+} 
+
+TabNavigator {
+    tabStyleName: "firefoxLikeTabs";
+}
+
+TitleWindow {
+	cornerRadius: 2;
+	highlightAlphas: 0.52, 0.4;
+	fillAlphas: .5,.5,.5,.5;
+   	fillColors: #c0c0c0, #a0a0a0;
+	
+	leftPadding: 0;
+	rightPadding: 0;
+	topPadding: 0;
+	bottomPadding: 0;
+		   
+	headerColors: #c0c0c0, #a0a0a0;
+	footerColors: #c0c0c0, #a0a0a0;
+}

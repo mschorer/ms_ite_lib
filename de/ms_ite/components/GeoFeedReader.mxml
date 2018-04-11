@@ -1,0 +1,1451 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group
+	xmlns:fx="http://ns.adobe.com/mxml/2009" 
+	xmlns:s="library://ns.adobe.com/flex/spark" 
+	xmlns:mx="library://ns.adobe.com/flex/mx"
+	xmlns:maptech="de.ms_ite.maptech.containers.*"
+	xmlns:local="de.ms_ite.components.*"
+	creationComplete="initUI();"
+	xmlns:ns1="*" width="100%" height="100%">
+	<s:layout>
+		<s:BasicLayout/>
+	</s:layout>
+	<!-- mx:Style source="GeoRSS.css" / -->
+	<fx:Declarations>
+		<s:HTTPService
+			id="listFeeds"
+			resultFormat="text"
+			url="http://www.alrightythen.de/demos/georss/listFeeds2.php"
+			result="feedsLoaded(event)" />
+		<s:HTTPService method="POST"
+						id="addFeed"
+						resultFormat="text"
+						url="http://www.alrightythen.de/demos/georss/addFeed2.php"
+						result="feedAdded(event)" />
+		<fx:XML format="e4x" id="mainMenuStatic" xmlns="">
+			<root>
+				<menuitem label="Feeds" data=""/>
+				<menuitem label="Map" data="">
+					<menuitem label="Overlays off" data="ovl_off" type="radio" groupName="gOvl"/>
+					<menuitem label="Yahoo Street Overlay" data="ovl_yahoo" type="radio" groupName="gOvl"/>
+					<menuitem label="Google Street Overlay" data="ovl_google" type="radio" groupName="gOvl"/>
+					<menuitem label="" data="" type="separator"/>
+					<menuitem label="OpenStreetMap" data="map_osm" type="radio" groupName="gMap"/>
+					<menuitem label="BlueMarble" data="map_bm" type="radio" groupName="gMap"/>
+					<menuitem label="Yahoo Aerial" data="map_yahsat" type="radio" groupName="gMap"/>
+					<menuitem label="Yahoo Map" data="map_yahmap" type="radio" groupName="gMap"/>
+					<menuitem label="VirtualEarth Aerial" data="map_vesat" type="radio" groupName="gMap"/>
+					<menuitem label="VirtualEarth Map" data="map_vemap" type="radio" groupName="gMap"/>
+					<menuitem label="VirtualEarth Hybrid" data="map_vehyb" type="radio" groupName="gMap"/>
+					<menuitem label="Google Aerial" data="map_gsat" type="radio" groupName="gMap"/>
+					<menuitem label="Google Map" data="map_gmap" type="radio" groupName="gMap"/>
+					<menuitem label="Google Terrrain" data="map_gelev" type="radio" groupName="gMap"/>
+				</menuitem>
+				<menuitem label="Settings" data="">
+					<menuitem label="Autostart" data="pref_autostart" type="check" />
+					<menuitem label="Fix Map" data="pref_autopos" type="check" />
+				</menuitem>
+				<menuitem label="About" data="about"/>
+			</root>
+		</fx:XML>
+		<fx:XML format="e4x" id="feedPresets" xmlns="">
+			<root>
+				<menuitem label="Add new feed ..." data="feed_add" toolTip="Add a new Feed URL"/>
+				<menuitem label="Reload feed list" data="feed_reload" toolTip="Reload the feed listing from the server."/>
+				<menuitem label="" type="separator" data=""/>
+			</root>
+		</fx:XML>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import com.adobe.crypto.MD5;
+			import com.adobe.serialization.json.*;
+			import com.adobe.utils.XMLUtil;
+			import com.adobe.xml.syndication.*;
+			import com.adobe.xml.syndication.atom.*;
+			import com.adobe.xml.syndication.rss.*;
+			
+			import de.ms_ite.events.RenderEvent;
+			import de.ms_ite.maptech.*;
+			import de.ms_ite.maptech.layers.*;
+			import de.ms_ite.maptech.mapinfo.*;
+			import de.ms_ite.maptech.symbols.*;
+			import de.ms_ite.maptech.symbols.styles.SymbolStyle;
+			import de.ms_ite.maptech.tools.SmoothTile;
+			import de.ms_ite.tools.*;
+			
+			import flash.events.*;
+			import flash.net.URLLoader;
+			import flash.net.URLRequest;
+			import flash.net.URLRequestMethod;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.controls.Alert;
+			import mx.controls.Image;
+			import mx.controls.Menu;
+			import mx.controls.ToolTip;
+			import mx.events.ListEvent;
+			import mx.events.MenuEvent;
+			import mx.managers.ToolTipManager;
+			import mx.rpc.events.*;
+			
+			import spark.events.IndexChangeEvent;
+//			import spark.events.ListEvent;
+			
+			//------------------------------------------------------
+			
+			[Embed(source='../assets/rss/rss_14.png')]
+			[Bindable]
+			public var iconRSS:Class;
+
+			[Embed(source='../assets/rss/atom_14.png')]
+			[Bindable]
+			public var iconAtom:Class;
+			
+			//------------------------------------------------------
+			
+//			private var urlHist:ArrayCollection;
+			private var loader:URLLoader;
+			
+			private var georss:Namespace, geo:Namespace, gml:Namespace, tmc:Namespace, dc:Namespace;
+			
+			private var loadQueue:LoadQueue;
+			
+			private var geoItems:ArrayCollection;
+			
+			protected var geoLayer:SymbolLayer;
+			protected var geomLayer:SymbolLayer;
+			
+			protected var mapLayer:AdaptiveLayer;
+			protected var ovlLayer:AdaptiveLayer;
+			
+			protected var defStyle:SymbolStyle;
+			protected var ptStyle:SymbolStyle;
+			
+//			protected var rssURL:String;
+			
+			protected var updateTimer:Timer = null;
+			protected var timeOut:Timer;
+			protected var timeoutLoad:Boolean = false;
+//			protected var request:URLRequest;
+			
+			protected var newFeed:XML;
+			protected var selectedFeed:XML;
+			
+			protected var fixView:Boolean;
+			protected var fixViewport:Bounds;
+			
+			protected var startupNotice:ToolTip;
+//			protected var startupNotice2:ToolTip;
+			
+			protected var listWidth:int = 150;
+			
+//			protected var addFeedURL:Boolean = false;
+/*			
+			protected var tmc_classes:Array = [ '---', 'Verkehrslage','Erwartete Verkehrslage','Unfälle','Vorfälle',
+						'Straßen- und Fahrbahnsperrungen','Verkehrsbeschränkungen',
+						'Beschränkungen der Ausfahrt','Beschränkungen der Einfahrt',
+						'Verkehrsbeschränkungen','Informationen für Fahrgemeinschaften',
+						'Bauarbeiten','Behinderungen auf der Fahrbahn','Gefährliche Situationen',
+						'Straßenzustand','Temperaturen',
+						'Niederschlag und Sichtbehinderungen','Wind und Luftqualität',
+						'Veranstaltungen','Sicherheitsvorfälle','Zeitverluste','Ausfälle',
+						'Reiseinformationen',
+						'Gefährliche Fahrzeuge','Außergewöhnliche Ladungen und Fahrzeuge',
+						'Störungen an Lichtsignalanlagen und sonstigen Straßenausrüstungen','Beschränkung der Fahrzeugmaße und -gewichte',
+						'Parkregelungen','Parken',
+						'Information','Service Meldungen','Spezielle Meldungen'];
+*/
+			protected var mainMenu:Menu;
+			protected var settingsSO:SharedObject;
+			
+			protected var dbc:DebugConnection;
+			
+			public var tileClass:Class = de.ms_ite.maptech.tools.SmoothTile;
+			
+			protected function initUI():void {
+				dbc = new DebugConnection( this, true);
+				
+				//create the local Shared Object
+				settingsSO = SharedObject.getLocal("georss_settings");
+				
+				geo = new Namespace( 'http://www.w3.org/2003/01/geo/wgs84_pos#');
+				georss = new Namespace( 'http://www.georss.org/georss');
+				gml = new Namespace( 'http://www.opengis.net/gml');
+				dc = new Namespace( 'http://purl.org/dc/elements/1.1/');
+				tmc = new Namespace( 'http://www.alrightythen.de/');
+				
+//				urlHist = new ArrayCollection();
+//				georssURL.dataProvider = urlHist;
+				
+ 				loadQueue = new LoadQueue();
+ 				loadQueue.PARLOADS = 5;
+ 				loadQueue.addEventListener( ProgressEvent.PROGRESS, handleProgress);
+ 				pbLoad.source = loadQueue;
+				
+				var m:MapInfoOpenStreetMap = new MapInfoOpenStreetMap();
+				map.mapInfo = m; 
+				
+//				map.viewport = new Bounds( 9.1, 47.1, 12.4, 50.3);
+
+ 				mapLayer = new AdaptiveLayer();
+ 				mapLayer.tileClass = tileClass;
+				mapLayer.loadQueue = loadQueue;
+				mapLayer.mapInfo = m;
+				mapLayer.priority = 1;
+				map.addChild( mapLayer);
+				
+ 				ovlLayer = new AdaptiveLayer();
+ 				ovlLayer.tileClass = tileClass;
+				ovlLayer.loadQueue = loadQueue;
+				ovlLayer.mapInfo = m;
+				ovlLayer.priority = 2;
+				ovlLayer.visible = false;
+				map.addChild( ovlLayer);
+
+				geoItems = new ArrayCollection();
+// 				outputList.dataProvider = geoItems;
+				
+ 				defStyle = new SymbolStyle();
+ 				
+ 				defStyle.normal.line.color = 0xff4040;
+ 				defStyle.normal.line.width = 3;
+
+ 				defStyle.selected.line.color = 0xff4040;
+ 				defStyle.selected.line.width = 4;
+ 				
+ 				defStyle.normal.surface.fill = false;
+ 				defStyle.normal.surface.alpha = 0.0;
+ 				defStyle.normal.surface.color = 0xffffff;
+
+ 				defStyle.selected.surface.alpha = 0.3;
+ 				defStyle.selected.surface.color = 0xffd0d0;
+
+				defStyle.icon.color = 0xff8080;
+
+ 				ptStyle = new SymbolStyle();
+ 				ptStyle.normal.line.color = 0x40ff40;
+ 				ptStyle.normal.line.width = 6;
+ 				ptStyle.selected.line.color = 0x40ff40;
+ 				ptStyle.selected.line.width = 6;
+
+				geomLayer = new SymbolLayer();
+				geomLayer.style = defStyle;
+				geomLayer.symbolClass = de.ms_ite.maptech.symbols.GeomSymbol;				
+				geomLayer.dataProvider = geoItems;
+				map.addChild( geomLayer); 					
+
+				geoLayer = new SymbolLayer();
+				geoLayer.style = ptStyle;
+				geoLayer.symbolClass = de.ms_ite.maptech.symbols.IconDrawSymbol;				
+				geoLayer.dataProvider = geoItems;
+				map.addChild( geoLayer);
+				
+//				geoLayer.addEventListener( ListEvent.ITEM_CLICK, handlePOISelect);
+				geoLayer.addEventListener( Event.CHANGE, handleSymbolSelectionChange);
+
+				rssItems.dataProvider = geoItems;					
+
+				map.updateView();
+				
+				map.addEventListener( RenderEvent.RENDER_CHANGING, handlePOIUnselect);
+//				map.addEventListener( Event.CHANGE, handleViewChange);
+
+				loader = new URLLoader();
+				loader.dataFormat = URLLoaderDataFormat.BINARY;
+			
+				//listen for when the data loads
+				loader.addEventListener(Event.COMPLETE, onDataLoad);
+			
+				//listen for error events
+				loader.addEventListener(IOErrorEvent.IO_ERROR, onIOError);
+				loader.addEventListener(SecurityErrorEvent.SECURITY_ERROR, onSecurityError);
+
+				listFeeds.send();
+				
+				mainMenu = Menu.createMenu( this, mainMenuStatic, false);	//menuProv);
+				mainMenu.labelField = '@label';
+				mainMenu.iconField = '@icon';
+//				mainMenu.iconField = 'icon';
+//				mainMenu.alpha = 0.6;
+				mainMenu.addEventListener(MenuEvent.ITEM_CLICK, handleMenu);
+				
+				uiAddFeed.addEventListener( Event.CHANGE, handleAddFeed);
+				uiAddFeed.addEventListener( Event.CANCEL, handleAddCancel);
+				
+				startupNotice = ToolTipManager.createToolTip( 'Click here to customize.', bContext.width, 5) as ToolTip;      
+		        startupNotice.setStyle("styleName", "errorTip");
+/*		        
+				startupNotice2 = ToolTipManager.createToolTip( 'Click/Drag to open list.', componentPane.width, 5, "errorTipRight") as ToolTip;      
+		        startupNotice2.setStyle("styleName", "errorTip");
+*/
+		        timeOut = new Timer( 4000, 1);
+		        timeOut.addEventListener( TimerEvent.TIMER_COMPLETE, removeNotice);
+		        timeOut.addEventListener( TimerEvent.TIMER, timeoutTick);
+		        timeOut.start();
+		        
+		        debug( "---------- settings -----------");
+		        
+   				if ( settingsSO.data.base_map == null) settingsSO.data.base_map = 'map_osm'; 
+				handleCommand( settingsSO.data.base_map, null, true);
+
+				if ( settingsSO.data.ovl_map == null) settingsSO.data.ovl_map = 'ovl_off'; 
+				handleCommand( settingsSO.data.ovl_map, null, true);
+
+				if ( settingsSO.data.view_fixed == null) settingsSO.data.view_fixed = false;
+				fixView = settingsSO.data.view_fixed;
+				debug( "view fixed: "+fixView);
+				try {				
+					var mXml:XML = mainMenuStatic;
+					var mi:XMLList = mXml.*.(@label == "Settings").*.(@data == 'pref_autopos');
+					mi.@toggled = fixView ? 'true' : 'false';
+				} catch( e:Error) {
+					debug( "dev mode.");
+				}
+
+				if ( settingsSO.data.view != null) {
+					var b:Object = settingsSO.data.view;
+					fixViewport = new Bounds( b.left, b.bottom, b.right, b.top);
+					debug( "view: "+fixViewport);
+					map.viewport = fixViewport;
+				} else {
+					map.viewport = m.bounds.clone();
+				}
+
+				if ( settingsSO.data.list_width != null) {
+					debug( "set list width: "+settingsSO.data.list_width);
+					listWidth = settingsSO.data.list_width;
+				} else listWidth = 100;
+
+				if ( settingsSO.data.list != null) {
+					if ( typeof( settingsSO.data.list) != 'boolean') {
+						settingsSO.data.list = settingsSO.data.list > 0;
+						debug( "reset val: "+settingsSO.data.list);
+					}
+					debug( "set list: "+settingsSO.data.list);
+					setListOpen( settingsSO.data.list);
+				}
+				
+				if ( settingsSO.data.list_sort != null) {
+					debug( "set list sort: "+settingsSO.data.list_sort);
+					msgColumn.sortDescending = settingsSO.data.list_sort;
+				}
+			}
+			
+			public function setView():void {
+				debug( "resize to: "+width+" x "+height+" : "+fixViewport);
+				if ( fixViewport != null) map.viewport = fixViewport;
+			}
+			
+			public function saveSettings():void {
+				debug( "------------- save settings -----------------");
+
+				var v:Bounds = map.viewport;
+				debug( "  view: "+v);				
+				settingsSO.data.view = v; 
+
+				debug( "view fixed: "+fixView);
+				settingsSO.data.view_fixed = fixView;
+				
+				debug( "list open: "+cbListState.selected);
+				settingsSO.data.list = cbListState.selected;
+				
+				debug( "list open width: "+listWidth);
+				settingsSO.data.list_width = listWidth;
+				
+				debug( "list sorting: "+msgColumn.sortDescending);
+				settingsSO.data.list_sort = msgColumn.sortDescending;
+			}
+			
+			protected function handlePOISelect( evt:ListEvent):void {
+				debug( "click! "+evt);
+				
+				if ( geoLayer.selectedItems.length > 0) {
+					debug("goto: "+geoLayer.selectedItems[0].link);
+				
+					if ( geoLayer.selectedItems[0].description != undefined) Object( parent).displayContent( geoLayer.selectedItems[0].description);
+					else Object( parent).displayInfo( geoLayer.selectedItems[0].link);
+				}
+			}
+
+		    protected function handleSymbolSelectionChange( evt:Event):void {
+		    	debug( "symbol selection changed: #"+geoLayer.selectedItems.length);
+		    	rssItems.selectedItems = geoLayer.selectedItems;
+		    	
+		    	if ( rssItems.selectedItems.length > 0) {
+			    	var item:Object = geoLayer.selectedItems[ rssItems.selectedItems.length -1];
+		
+					// find index of last added item
+					var idx:int = -1;	    	
+			    	for( var i:int = 0; i < rssItems.selectedIndices.length; i++) {
+			    		if ( rssItems.dataProvider[ rssItems.selectedIndices[ i]] == item) {
+			    			idx = rssItems.selectedIndices[ i];
+			    			break;
+			    		}
+			    	}
+			    	
+			    	// if not visible scroll table to show it
+			    	if ( ! rssItems.isItemVisible( item) && idx >= 0) {
+			    		rssItems.scrollToIndex( idx);
+			    	}
+		    	}
+	//	    	dispatchEvent( new Event( Event.CHANGE));
+		    }
+		    
+			private function handleSelectionChange( event:ListEvent):void {
+		    	debug( "list selection changed: #"+rssItems.selectedItems.length);
+	//            if ( event.rowIndex >= 0) layer.selectItem( dataProvider[ event.rowIndex]);
+	            geoLayer.selectedItems = rssItems.selectedItems;
+	        }
+
+			protected function handlePOIUnselect( evt:Event):void {
+				debug( "unselect.");
+				Object( parentApplication).hideInfo();
+			}
+			
+			protected function timeOutStop():void {
+				if ( timeoutLoad) timeOut.stop();
+			}
+			
+			protected function timeoutTick( evt:TimerEvent):void {
+				debug( "tick: "+timeOut.currentCount+"/"+timeOut.repeatCount);
+				
+				loadPanel.setProgress( timeOut.currentCount, timeOut.repeatCount);
+			}
+			
+			protected function removeNotice( evt:TimerEvent):void {
+				timeOut.stop();
+				
+				if ( timeoutLoad) {
+					debug( "cancel load.");
+					this.onIOError( new IOErrorEvent( IOErrorEvent.IO_ERROR));
+				} else {
+					debug( "remove notice.");
+					if ( startupNotice != null) {
+						ToolTipManager.destroyToolTip(startupNotice);
+						startupNotice = null;
+					}
+
+					timeOut.delay = 1000;
+					timeOut.repeatCount = 25;
+					timeOut.reset();
+
+					timeoutLoad = true;
+				}
+			}
+			
+			protected function handleMenu( evt:MenuEvent):void {
+				
+				var menuItem:XML = XML( evt.item);
+				var action:String = menuItem.@data;
+		    	if ( action == null) return;
+
+		    	handleCommand( action, menuItem);
+		 	}
+		    			    	
+		    protected function handleCommand( action:String, menuItem:XML=null, updateMenu:Boolean=false):void {
+		    	var nd:XML,mm:XMLList;
+		    	var menuLevels:Array = action.split( '_');
+		    	debug( "command: "+menuLevels.join( ' - '));		    	
+		    	
+		    	var m:MapInfo;
+		    	switch( menuLevels[0]) {
+		    		case 'feed':
+		    			if ( menuLevels[1] == 'add') uiAddFeed.enabled = true;
+						if ( menuLevels[1] == 'reload') listFeeds.send();						
+		    		break;
+		    		
+		    		case 'ovl':
+		   				switch( menuLevels[1]) {
+				    		case 'off':
+				    			ovlLayer.visible = false;
+							break;
+				    		case 'yahoo':
+				    			ovlLayer.visible = true; 
+				    			ovlLayer.mapInfo = new MapInfoYahoo( MapInfo.MODE_OVERLAY);
+							break;
+				    		case 'google': 
+				    			ovlLayer.visible = true; 
+				    			ovlLayer.mapInfo = new MapInfoGoogle( MapInfo.MODE_OVERLAY);
+							break;
+		   				}
+						map.updateView();
+
+						settingsSO.data.ovl_map = action;
+						
+						if ( updateMenu) {
+							mm = mainMenuStatic.*.(@label == 'Map').*.(@data == action);
+							debug( "set map: "+action); 
+							nd = mm[0];
+							mainMenu.dataDescriptor.setToggled( nd, true);
+						}
+		   			break;
+
+					case 'map':
+						switch( menuLevels[1]) {
+				    		case 'osm': mapLayer.mapInfo = new MapInfoOpenStreetMap();break;
+		
+				    		case 'bm': mapLayer.mapInfo = new MapInfoBlueMarble(); break;
+		
+				    		case 'yahsat': mapLayer.mapInfo = new MapInfoYahoo( MapInfo.MODE_AERIAL); break;
+				    		case 'yahmap': mapLayer.mapInfo = new MapInfoYahoo( MapInfo.MODE_MAP); break;
+		
+				    		case 'vesat': mapLayer.mapInfo = new MapInfoMicrosoft( MapInfo.MODE_AERIAL); break;
+				    		case 'vemap': mapLayer.mapInfo = new MapInfoMicrosoft( MapInfo.MODE_MAP); break;
+				    		case 'vehyb': mapLayer.mapInfo = new MapInfoMicrosoft( MapInfo.MODE_HYBRID); break;
+		
+				    		case 'gsat': mapLayer.mapInfo = new MapInfoGoogle( MapInfo.MODE_AERIAL); break;
+				    		case 'gmap': mapLayer.mapInfo = new MapInfoGoogle( MapInfo.MODE_MAP); break;
+				    		case 'gelev': mapLayer.mapInfo = new MapInfoGoogle( MapInfo.MODE_TERRAIN); break;
+						}
+						map.mapInfo = mapLayer.mapInfo;
+						map.updateView();
+						
+						settingsSO.data.base_map = action; 
+						if ( updateMenu) {
+							mm = mainMenuStatic.*.(@label == 'Map').*.(@data == action);
+							debug( "set map: "+action); 
+							nd = mm[0];
+//							nd.@toggled = true;
+							mainMenu.dataDescriptor.setToggled( nd, true);
+						}
+					break;
+
+					case 'about':
+						debug( "about");
+						aboutPanel.visible = true;
+//						navigateToURL( new URLRequest( 'http://www.alrightythen.de/blog/2008/12/georss-viewer-in-air/'));
+					break;
+					
+					case 'pref':
+						debug( "pref "+menuLevels.join( '#'));
+						switch( menuLevels[1]) {
+				    		case 'autopos':
+				    			fixView = (menuItem.@toggled == 'true');				    			
+				    			debug( "set fix_view: "+fixView);
+				    		break;
+				    		
+				    		default:
+								Object( parent).handleMenu( menuLevels, menuItem);
+						}
+					break;
+
+					default:
+						selectedFeed = menuItem;
+						debug( "switch to: "+selectedFeed.@label+"/"+selectedFeed.@data+"/"+selectedFeed.@reflector);
+						loadFeed( selectedFeed);
+						
+						settingsSO.data.feed = selectedFeed; 
+		    	}
+		    	debug( "menu done.");
+			}
+
+			private function feedsLoaded(event:ResultEvent):void {
+				var rawData:String = String(event.result);
+				
+				if ( rawData.length == 0) {
+					Alert.show( 'No GeoRSS url yet.\nPlease add a URL!', 'Error:');
+					return;
+				}
+
+				var feeds:XML = new XML( rawData);
+				var initFeed:XML = null;
+				var node:XML = mainMenuStatic.menuitem.(@label == 'Feeds')[0];
+				
+				delete node.*;
+				node.setChildren( feedPresets.children());
+				
+				for each( var item:XML in feeds.menuitem) {
+					debug( "add: "+item.@label+" / "+item.@data);
+					node.appendChild( item);
+					
+					if ( initFeed == null) initFeed = item.(@data != '')[0];
+				}
+				
+				if ( settingsSO.data.feed == null) {
+					debug( "first-time-init feed: "+initFeed.toString());
+					settingsSO.data.feed = initFeed;
+				} else {
+					var feedURL:String = XML( settingsSO.data.feed).@data;
+					debug( "searching feed: "+feedURL);
+
+					var selFeeds:XMLList = node.*.(@data != '' && @data == feedURL);
+					if ( selFeeds.length() == 0) selFeeds = node.*.*.(@data != '' && @data == feedURL);
+					if ( selFeeds.length() == 0) selFeeds = node.*.*.*.(@data != '' && @data == feedURL);
+					
+					if ( selFeeds.length() == 0) debug( "feed not found: "+feedURL);
+					else {
+						debug( "preset feed: "+selFeeds[0].@label+" / "+selFeeds[0].@data);						
+						initFeed = selFeeds[0];
+					}
+				}
+				
+				if ( initFeed != null) loadFeed( initFeed);
+			}
+			
+			protected function handleAddCancel( evt:Event):void {
+				debug( "cancel add.");
+//				uiAddFeed.visible = false;
+			}
+			
+			protected function handleAddFeed( evnt:Event):void {
+				var url:String = url2attrib( uiAddFeed.url);
+				
+				debug( "add: "+url);
+				
+				newFeed = new XML( '<menuitem label="'+url+'" data="'+url+'" reflector="false" />');				
+				loadFeed( newFeed);
+			}
+
+			protected function loadFeed( item:XML):void {
+				
+				stopRefresh();
+				
+				selectedFeed = item;
+
+//				var rssURL:String = ( item.@reflector == 'true') ? ('http://www.alrightythen.de/demos/georss/reflect.php/'+item.@data) : item.@data;
+				var rssURL:String = item.@data;
+				rssURL = rssURL.replace( "&amp;", "&");
+				rssURL = rssURL.replace( "&lt;", "<");
+				
+				debug( "load: "+item.@reflector+" / "+rssURL+" / "+item);
+				
+				var request:URLRequest = new URLRequest( rssURL);
+				request.method = URLRequestMethod.GET;
+				//load the feed data
+				loader.load(request);
+				
+				loadPanel.visible = true;
+				
+				timeOut.reset();
+				loadPanel.setProgress( timeOut.currentCount, timeOut.repeatCount);
+
+		        timeOut.start();
+			}
+/*			
+			private function handleReflect( e:Event):void {
+				var selIndex:int = georssURL.selectedIndex;
+				
+				var item:Object = urlHist.getItemAt( georssURL.selectedIndex);	
+				debug( "chg indirect: "+selIndex+" / "+item+" / "+useReflector.selected);
+				
+				item.reflector = useReflector.selected;
+				urlHist.itemUpdated( item, 'reflector', false, true);
+			}
+*/
+			private function onIOError(e:IOErrorEvent):void
+			{
+				debug("IOError : " + e.text);
+				
+				uiAddFeed.displayError( attrib2url(( newFeed != null) ? newFeed.@data : selectedFeed.@data), 'IO Error: '+e.text);
+
+				loadPanel.visible = false;
+				timeOutStop();
+
+				newFeed = null;
+			}
+			
+			protected function attrib2url( url:String):String {
+				url = url.replace( "&amp;", "&");
+				url = url.replace( "&lt;", "<");
+				return url;
+			}
+			
+			protected function url2attrib( url:String):String {
+				url = url.replace( "&", "&amp;");
+				url = url.replace( "<", "&lt;");
+				return url;
+			}
+			private function onSecurityError(e:SecurityErrorEvent):void
+			{
+				debug("SecurityError : " + e.text);
+				
+				if ( selectedFeed.@reflector == 'true') {
+					
+					uiAddFeed.displayError( attrib2url( selectedFeed.@data), 'Security Error: '+e.text);
+					
+					loadPanel.visible = false;
+					timeOutStop();
+					
+					newFeed = null;
+					return;
+				} else {
+					debug( "retrying with reflector...");
+//					Alert.show('Security error.\nRetrying with reflector.','Error:');
+//					handleURLChange( null);
+					selectedFeed.@reflector = "true";
+					loadFeed( selectedFeed);
+				}
+			}
+						
+			//called once the data has loaded from the feed
+			private function onDataLoad(e:Event):void {
+				
+				loadPanel.visible = false;
+				timeOutStop();
+				
+				var loader:URLLoader = URLLoader( e.target);
+				parseFeed( loader.data);
+			}
+
+			protected function startRefresh( timeout:int):void {
+				debug( "startRefresh: "+timeout);
+				if ( updateTimer != null) {
+					updateTimer.stop();
+					updateTimer.repeatCount = timeout;
+					updateTimer.reset();
+				} else {
+					updateTimer = new Timer( 1000, timeout);
+					updateTimer.addEventListener( TimerEvent.TIMER, reloadTick);
+					updateTimer.addEventListener( TimerEvent.TIMER_COMPLETE, reloadFeed);
+				}					
+				
+				updateTimer.start(); 
+			}
+						
+			protected function stopRefresh():void {
+				debug( "stopRefresh");
+				if ( updateTimer != null) {
+					updateTimer.stop();
+				}					
+			}
+			
+			protected function reloadTick( evt:TimerEvent):void {
+//				debug( "feedTick "+updateTimer.currentCount+"/"+updateTimer.repeatCount);
+				pbRefresh.setProgress( updateTimer.currentCount, updateTimer.repeatCount);
+				
+				pbRefresh.label = urTime( updateTimer.currentCount)+"/"+urTime( updateTimer.repeatCount);
+			}
+			
+			protected function urTime( t:int):String {
+				
+				var ts:String = '';
+				
+				if ( t >= 3600) {
+					var h:int = Math.floor( t / 3600); 
+					ts += h+"h";
+					t %= 3600; 
+				}
+				if ( t >= 60) {
+					var m:int = Math.floor( t / 60);
+					if ( m > 0) ts += m+"m";
+					t %= 60; 
+				}
+				if ( t > 0) ts += t+'s';
+				
+				return ts;
+			}
+			
+			protected function reloadFeed( evt:TimerEvent):void {
+				debug( "reload feed.");
+				updateTimer.reset();
+				updateTimer.start();
+//				handleURLChange( new Event( Event.CHANGE));
+				loadFeed( selectedFeed);				
+			}
+			
+			protected function feedAdded( evt:ResultEvent):void {
+				debug( "added: "+evt.toString());
+//				addFeedURL = false;
+				newFeed = null;
+			}
+									
+			//parses RSS 2.0 feed 
+			private function parseFeed(xmlData:String):void {
+			
+				//validate for xml
+				if( ! com.adobe.utils.XMLUtil.isValidXML(xmlData))
+				{
+					uiAddFeed.displayError( attrib2url( selectedFeed.@data), 'Format Error: '+"Feed does not contain valid XML.");
+
+					return;
+				}
+				
+				var feedXML:XML = new XML( xmlData);
+				debug( "### feed: "+feedXML.localName());
+				for each( var att:XML in feedXML.attributes()) {
+					debug( "  "+att.name()+" = "+att.valueOf().toString());
+				} 
+				
+				var feedType:String = feedXML.localName().toString().toLowerCase();
+				switch( feedType) {
+					
+					case 'rdf':
+					case 'rss':
+						geoItems.removeAll();
+						
+						if ( feedType == 'rdf' || feedXML.@version.toString() != '2.0') { 
+							debug( 'rss1 '+feedXML.@version);
+							var rss10:RSS10 = new RSS10();
+							NewsParser( rss10).parse( xmlData);
+							parseRSS10( rss10, feedXML);
+						} else {
+							debug( 'rss2 '+feedXML.@version);
+							var rss20:RSS20 = new RSS20();
+							NewsParser( rss20).parse( xmlData);
+							parseRSS20( rss20, feedXML);
+						}
+						selectedFeed.@icon = 'iconRSS';
+					break;
+					
+					case 'feed':
+						geoItems.removeAll();
+
+						var atom:IAtom;
+						debug( 'atom');
+						atom = new Atom10();
+						NewsParser( atom).parse( xmlData);
+						parseAtom10( atom, feedXML);
+						selectedFeed.@icon = 'iconAtom';
+					break;
+				}
+
+				if ( geoLayer.bounds.left == 0 && geoLayer.bounds.right == 0 && geoLayer.bounds.top == 0 && geoLayer.bounds.bottom == 0) {
+					uiAddFeed.displayError( attrib2url(( newFeed != null) ? newFeed.@data : selectedFeed.@data), 'Feed Error: Could not find geographic information.');
+				} else { 
+					var hyst:Number = Math.max( geoLayer.bounds.width * 0.15, geoLayer.bounds.height * 0.15);
+					if ( hyst == 0) hyst = 0.02;
+					var view:Bounds = geomLayer.bounds.getExpandedPx( hyst, hyst);
+					view.clip( map.mapInfo.bounds);
+					
+					debug( "view("+fixView+"): "+hyst+" / "+view);
+					if ( ! fixView) map.viewport = view;				
+					
+					if ( newFeed != null) {
+						var deja:XMLList;
+						
+						try {
+							deja = mainMenuStatic.menuitem.(@label == 'Feeds').menuitem.(@data == newFeed.@data);
+						} catch( e:Error) {
+							debug( "error: "+e);
+						} 
+						
+						if ( deja.length() > 0) {
+							uiAddFeed.displayError( attrib2url(( newFeed != null) ? newFeed.@data : selectedFeed.@data), 'Feed already known:\n'+deja[0].@label);							
+						} else {
+							debug( "add feed: "+newFeed.@label+"/"+newFeed.@data+"/"+newFeed.@icon+"/"+newFeed.@reflector);
+							
+							var node:XML = mainMenuStatic.menuitem.(@label == 'Feeds')[0];
+							node.appendChild( newFeed);
+	
+	//						menuData[0].children.push( newFeed);
+							addFeed.send( { item:newFeed.toXMLString()});
+							selectedFeed = newFeed;
+							newFeed = null;
+							
+							uiAddFeed.closeSuccess( 'Feed sucessfully added!');
+						}
+					}		
+				}		
+			}
+
+			protected function setFeedTitle( title:String):void {
+				var ourl:String = selectedFeed.@label;
+				selectedFeed.@label = title;
+//				menuProv.itemUpdated( selectedFeed, 'label', ourl, title);
+				debug( "rename channel: "+ourl+" to "+title);				
+			}	
+					
+			private function parseAtom10( atom:IAtom, xml:XML):void {
+				debug( "parse atom.");
+				//get all of the items within the feed
+				var items:Array = atom.entries;
+				
+				setFeedTitle( atom.feedData.title.value);
+
+				var ttl:String = xml.@refresh;
+				if ( ttl != null && ttl != '') {
+					startRefresh( 60 * Math.max( 1, parseFloat( ttl)));
+				} else {
+					startRefresh( 60 * 60);
+				}
+
+				var row:int = 0;		
+				//loop through each item in the feed
+				for each(var item:Entry10 in items) {
+					var o:Object = new Object();
+
+					o['id'] = item.id;
+					o['row'] = row++;
+					o['timestamp'] = ( item.updated != null) ? item.updated.getTime() : (( item.published != null) ? item.published.getTime() : '');
+					o['title'] = item.title;
+					o['link'] = ( item.links.length > 0) ? item.links[0].href : '';
+					o['pubDate'] = ( item.updated != null) ? item.updated : item.published;
+					
+					var ac:String = ( item.summary != null) ? item.summary.value : '';
+					ac += ( item.content != null) ? (((ac != '') ? '<p />' : '')+item.content.value) : '';
+					o['description'] = ac;
+					
+					var cats:Array = new Array();
+					for each( var cat:com.adobe.xml.syndication.atom.Category in item.categories) {
+						cats.push(((cat.label != null) ? (cat.label+"/") : '')+cat.term);
+					}					
+					o['categories'] = cats.join( ", ");
+	
+					o[ 'location'] = parseGeo( item.xml[0]);
+					o[ 'geometry'] = parseGeo( item.xml[0]);
+	
+	//				debug( "---: "+o.geometry);
+					
+					if ( o['location'] != null || o['geometry'] != null) geoItems.addItem( o);
+				}
+			}
+			
+			private function parseRSS10( feed:RSS10, xml:XML):void {
+				//get all of the items within the feed
+				var items:Array = feed.items;
+				
+				setFeedTitle( feed.channel.title);
+				startRefresh( 3600);
+		
+				var row:int = 0;		
+				//loop through each item in the feed
+				for each(var item:Item10 in items) {
+					var o:Object = new Object();
+
+					o['id'] = MD5.hash( item.xml);
+					o['row'] = row++;
+//					debug( "hash: "+o['id']);
+					o['title'] = item.title;
+					o['link'] = item.link;
+					try {
+						o['pubDate'] = item.date;
+						o['timestamp'] = item.date.getTime();
+					} catch ( e:Error) {
+//						debug( "error.parsing rss10-date: ["+item.xml.dc::date.toString()+"]");
+						o['pubDate'] = item.xml.dc::date.toString();
+						o['timestamp'] = ( item.xml.dc::date == null) ? 0 : item.xml.dc::date.getTime();
+					}
+					o['description'] = item.description;
+
+					var cats:Array = new Array();
+					for each( var cat:String in item.subjects) {
+						cats.push( cat);
+					}					
+					o['categories'] = cats.join( ", ");
+	
+					o[ 'location'] = parseGeo( item.xml[0]);
+					o[ 'geometry'] = parseGeo( item.xml[0]);
+	
+	//				debug( "---: "+o.geometry);
+					
+					if ( o['location'] != null || o['geometry'] != null) geoItems.addItem( o);
+				}
+			}
+
+			private function parseRSS20( feed:RSS20, xml:XML):void {
+				//get all of the items within the feed
+				var items:Array = feed.items;
+				
+				setFeedTitle( feed.channel.title);
+				
+				var ttl:String = xml.channel.ttl;
+				if ( ttl != null && ttl != '') {
+					startRefresh( 60 * Math.max( 1, parseFloat( ttl)));
+				} else {
+					startRefresh( 3600);
+				}
+		
+				var row:int = 0;		
+				//loop through each item in the feed
+				for each(var item:Item20 in items) {
+					var o:Object = new Object();
+
+					o['id'] = item.guid;
+					o['row'] = row++;
+					o['title'] = item.title;
+					o['link'] = item.link;
+					try {
+						o['pubDate'] = item.pubDate;
+						o['timestamp'] = item.pubDate.getTime();
+					} catch ( e:Error) {
+//						debug( "error.parsing rss10-date: ["+item.xml.dc::date.toString()+"]");
+						o['pubDate'] = item.xml.pubDate.toString();
+						o['timestamp'] = 0;
+					}
+					o['description'] = item.description;
+
+					var cats:Array = new Array();
+					for each( var cat:com.adobe.xml.syndication.rss.Category in item.categories) {
+						cats.push( cat.path.join( "/"));
+					}					
+					o['categories'] = cats.join( ", ");
+	
+					o[ 'location'] = parseGeo( item.xml[0]);
+					o[ 'geometry'] = parseGeo( item.xml[0]);
+						
+//					debug( "---: "+o.geometry);
+					
+					if ( o['location'] != null || o['geometry'] != null) geoItems.addItem( o);
+				}
+			}
+			
+			protected function parseGeo( src:XML):String {
+				var geom:String, loc:String;
+				var p:Point;
+				var location:String;
+				var lon:String, lat:String;
+				var item:XML;
+				var parts:Array;
+				var partString:Array;
+				var part:String;
+				var pgml:XML;
+				var pNodes:XMLList;
+				
+				var geocoll:Array = new Array();
+
+				for each( var node:XML in src.*) {
+					
+					if ( node.namespace() == null) continue;
+					
+					var nname:String = (( node.namespace().prefix.length > 0) ? (node.namespace().prefix+':') : '')+node.localName();
+					var value:String = node.valueOf().toString();
+					
+					if ( nname.indexOf( 'geo') != 0) continue;
+
+//					debug( "  geodata: "+nname+" / "+value);
+					switch( nname) {
+						
+						// w3c format
+						case 'geo:Point':
+						case 'geo:point':
+							var pt:XMLList = src.geo::point.*;
+
+							lon = (pt.geo::long != undefined ) ? pt.geo::long : pt.geo::lon;
+							lat = (pt.geo::lat != undefined ) ? pt.geo::lat : null;
+							if ( lat != null && lon != null) {
+								location = 'POINT('+lon+' '+lat+')';
+								geocoll.push( location);
+//								debug( "geoP @ "+location);
+							}
+						break;
+						
+						case 'geo:long': break;
+						case 'geo:lat':
+							lon = (src.geo::long != undefined ) ? src.geo::long : src.geo::lon;
+							lat = (src.geo::lat != undefined ) ? src.geo::lat : null;
+							if ( lat != null && lon != null) {
+								location = 'POINT('+lon+' '+lat+')';
+								geocoll.push( location);
+//								debug( "geoS @ "+location);
+							}
+						break;
+						
+						// simple format
+						case 'georss:collection':
+							var coll:XMLList = src.georss::collection.*;
+							for each( item in coll) {
+								
+								var pl:Array = parsePointList( item);
+								geom = listCoords( pl);
+//								debug( "## parsed #"+pl.length+" : "+pl.join( ' . '));
+			
+			//					debug( "  geo:"+item.localName()+" = "+geom);
+								
+								switch( item.localName()) {
+									case 'point': 
+										p = Point( pl.shift());					 
+										loc = 'POINT('+p.x+' '+p.y+')';
+										geocoll.push( loc);
+										if ( location == null) location = loc;
+									break;
+									
+									case 'line': geocoll.push( 'LINESTRING('+geom+')');
+									break;
+									
+									case 'polygon': geocoll.push( 'POLYGON('+geom+')');
+									break;
+									
+									case 'box': geocoll.push( 'POLYGON('+geom+')');
+									break;
+									
+									default:
+								}
+							}
+//							debug( "georss coll @ #"+geocoll.length);
+						break;
+
+						case 'georss:point':
+							p = Point( parsePointList( value).shift());					 
+							loc = 'POINT('+p.x+' '+p.y+')';
+							geocoll.push( loc);
+							if ( location == null) location = loc;
+//							debug( "georss @ point:"+loc);
+							
+//							var radius:XMLList = src.georss::radius;
+//							debug( "  rad  @ "+parseFloat( radius.valueOf().toString()));
+						break;
+						
+						case 'georss:multipoint':
+							parts = value.split( ',');
+							partString = new Array();
+
+							var asOrig:Boolean = true;							
+							for each( part in parts) { 
+								partString.push( listCoords( parsePointList( part)));
+								if ( asOrig) {
+									p = Point( parsePointList( part).shift());					 
+									loc = 'POINT('+p.x+' '+p.y+')';
+
+									asOrig = false;
+								}
+							}
+							geom = 'MULTIPOINT(('+partString.join('),(')+'))';
+							geocoll.push( geom);
+							
+							if ( location == null) location = loc;
+							debug( "georss @ multipoint:"+geom);
+							
+//							var radius:XMLList = src.georss::radius;
+//							debug( "  rad  @ "+parseFloat( radius.valueOf().toString()));
+						break;
+						
+						case 'georss:line':
+							geom = listCoords( parsePointList( value));
+							geocoll.push( 'LINESTRING('+geom+')');
+//							debug( "georss @ line:"+geom);
+						break;
+						
+						case 'georss:multiline':
+							parts = value.split( ',');
+							partString = new Array();
+							
+							for each( part in parts) { 
+								partString.push( listCoords( parsePointList( part)));
+							}
+							geom = 'MULTILINESTRING(('+partString.join('),(')+'))';
+							geocoll.push( geom);
+							debug( "georss @ multiline:"+geom);
+						break;
+						
+						case 'georss:polygon':
+							geom = listCoords( parsePointList( value));
+							geocoll.push( 'POLYGON('+geom+')');
+//							debug( "georss @ poly:"+geom);
+						break;
+						
+						case 'georss:multipolygon':
+							parts = value.split( ',');
+							partString = new Array();
+							
+							for each( part in parts) { 
+								partString.push( listCoords( parsePointList( part)));
+							}
+							geom = 'MULTIPOLYGON(('+partString.join('),(')+'))';
+							geocoll.push( geom);
+							debug( "georss @ multipoly:"+geom);
+						break;
+						
+						case 'georss:box':
+							geom = listCoords( parsePointList( value));
+							geocoll.push( 'POLYGON('+geom+')');
+//							debug( "georss @ box:"+geom);
+						break;
+						
+						// gml format
+						case 'georss:where':
+							var gmlNodes:XMLList = src.georss::where.*;
+							for each( item in gmlNodes) {
+								debug( "  parse gml:"+item.localName());
+								
+								switch( item.localName()) {
+									case 'Point':
+										p = parsePoint( item.gml::pos);
+										loc = 'POINT('+p.x+' '+p.y+')';
+										geocoll.push( loc);
+										debug( "  gml P :"+loc);
+										if ( location == null) location = loc;
+									break;
+									
+									case 'MultiPoint':
+										var wNodes:XMLList = item.gml::pointMembers.*;
+										var pts:Array = new Array();
+										var first:Point = null;
+										for each( pgml in wNodes) {
+											p = parsePoint( pgml.gml::pos);
+											if ( first == null) first = p;
+											pts.push( p.x+' '+p.y);
+										}
+										loc = 'MULTIPOINT('+pts.join(',')+')';
+										geocoll.push( loc);
+										debug( "  gml MP :"+loc);
+										if ( location == null) location = 'POINT('+first.x+' '+first.y+')';;
+									break;
+									
+									case 'LineString':
+										geom = 'LINESTRING('+listCoords( parsePointList( item.gml::posList))+')';
+										geocoll.push( geom);
+										debug( "  gml L :"+geom);
+									break;
+									
+									case 'MultiLineString':
+										pNodes = item.gml::lineMembers.*;
+										var lns:Array = new Array();
+										for each( pgml in pNodes) {
+											lns.push( listCoords( parsePointList( pgml.gml::posList)));
+										}
+										geom = 'MULTILINESTRING(('+lns.join('),(')+'))';
+										geocoll.push( geom);
+										debug( "  gml ML :"+geom);
+									break;
+									
+									case 'Polygon':
+										var gml_poly:String;
+										var ext_node:XMLList = item.gml::exterior;
+										if ( ext_node.length() > 0) {
+											gml_poly = ext_node[0].gml::LinearRing.gml::posList;
+											debug( "  gml: using exterior ring.");
+										} else {
+											gml_poly =item.gml::LinearRing.gml::posList; 
+											debug( "  gml: debug / skipping exterior ring.");
+										}
+										geom = 'POLYGON('+listCoords( parsePointList( gml_poly))+')';
+										geocoll.push( geom);
+										
+										debug( "    gml PLY: "+geom);
+									break;
+									
+									case 'MultiPolygon':
+
+										pNodes = item.gml::polygonMembers.*;
+										var pns:Array = new Array();
+										for each( pgml in pNodes) {
+											pns.push( listCoords( parsePointList( pgml.gml::exterior.gml::LinearRing.gml::posList)));
+										}
+										geom = 'MULTIPOLYGON((('+pns.join(')),((')+')))';
+										geocoll.push( geom);
+										
+										debug( "    gml PLY: "+geom);
+									break;
+									
+									case 'Envelope':
+										var ll:Point = Point( parsePointList( item.gml::lowerCorner).shift());
+										var tr:Point = Point( parsePointList( item.gml::upperCorner).shift());
+										
+										geocoll.push( 'POLYGON('+ll.x+' '+ll.y+','+ll.x+' '+tr.y+','+tr.x+' '+tr.y+','+tr.x+' '+ll.y+','+ll.x+' '+ll.y+')');
+										debug( "    gml ENV: "+ll+" / "+tr);
+									break;
+									
+									default:
+								}
+							}
+							debug( "gml @ #"+geocoll.length);
+						break;
+					}
+				}
+				
+				var geometry:String = '';
+				
+				switch( geocoll.length) {
+					case 0:
+						geometry = null;
+					break;
+					
+					case 1:
+						geometry = String( geocoll.shift());
+					break;
+					
+					default:
+						geometry = 'GEOMETRYCOLLECTION('+geocoll.join( ' ')+')';
+				}	
+				
+//				debug( "geo: "+geometry);
+					
+				return geometry;
+			}
+			
+			protected function onChangeSortOrder( evt:IndexChangeEvent):void {
+				debug( "change sorting to: "+cSortOrder.selectedItem.data);
+				
+				var sort:Sort = new Sort();
+				
+				switch( evt.target.selectedItem.data) {
+					case 'date_dn':
+						//  field, caseInsensitive , desc, numeric
+						sort.fields = [ new SortField( 'timestamp', true, false, true) ];
+					break;
+					
+					case 'date_up':
+						//  field, caseInsensitive , desc, numeric
+						sort.fields = [ new SortField( 'timestamp', true, true, true) ];
+					break;
+					
+					case 'title_up':
+						//  field, caseInsensitive , desc, numeric
+						sort.fields = [ new SortField( 'title', true, false, false) ];
+					break;
+					
+					case 'title_dn':
+						//  field, caseInsensitive , desc, numeric
+						sort.fields = [ new SortField( 'title', true, true, false) ];
+					break;
+					
+					case 'feed_up':
+						//  field, caseInsensitive , desc, numeric
+						sort.fields = [ new SortField( 'row', true, false, true) ];
+					break;
+					
+					case 'feed_dn':
+					default:
+						//  field, caseInsensitive , desc, numeric
+						sort.fields = [ new SortField( 'row', true, true, true) ];					
+				}
+				
+				geoItems.sort = sort;
+				geoItems.refresh();
+			}
+			
+			protected function parsePoint( geo:String):Point {
+				return Point( parsePointList( geo).shift());					 
+			}
+
+			protected function parsePointList( geo:String):Array {
+				
+//				debug( "parse: "+geo);
+				geo = geo.replace( /\n/g, "");
+				
+				var coords:Array = geo.split( ' ');				
+				var res:Array = new Array();
+
+				var out:String = '';
+				var x:Number, y:Number;
+				
+				for( var i:int = 0; i < coords.length; i++) {
+					y = coords[ i++];
+					x = coords[ i];
+					res.push( new Point( x, y));
+//					debug( "  "+i+" : "+res[ res.length-1]);
+				}
+				
+				return res;
+			}
+
+			protected function listCoords( geo:Array):String {
+				var res:String = '';
+				for( var i:int = 0; i < geo.length; i++) {
+					if ( i > 0) res += ',';
+					res += geo[ i].x+' '+geo[i].y;
+				}
+				
+				return res;
+			}
+
+ 			protected function handleProgress( evt:ProgressEvent):void {
+	//			debug( "progress: "+evt.bytesLoaded+" / "+evt.bytesTotal);
+				var pe:ProgressEvent = new ProgressEvent( ProgressEvent.PROGRESS);
+				pe.bytesLoaded = evt.bytesLoaded;
+				pe.bytesTotal = evt.bytesTotal;
+				
+				pbLoad.visible = ( evt.bytesLoaded != evt.bytesTotal);
+
+				dispatchEvent( pe);
+			}
+			
+			protected function handleHome( evt:Event):void {
+				mainMenu.show( evt.target.x+evt.target.width, evt.target.y);
+				
+				if ( ! timeoutLoad) removeNotice( null);
+//				navigateToURL( new URLRequest( 'http://www.alrightythen.de/blog/')); 
+			}
+			
+			protected function handleListToggle( evt:Event):void {
+				debug( "open list: "+vbList.width);
+				setListOpen( cbListState.selected);					 
+			}
+
+			protected function setListOpen( op:Boolean):void {
+				debug( "open list("+op+"): "+width+" / "+listWidth+" / "+componentPane.getDividerAt(0).x);
+				if ( op) {
+//					vbList.width = ( listWidth > 10) ? listWidth : 200;
+//					componentPane.moveDivider( 0, - listWidth);	//- (( listWidth > 10) ? listWidth : 200));
+					componentPane.getDividerAt(0).x = width - listWidth; 
+//					vbList.visible = true;
+				} else {
+					listWidth = width - componentPane.getDividerAt(0).x;
+					componentPane.getDividerAt(0).x = width;
+//					componentPane.moveDivider( 0, componentPane.width);
+//					vbList.width = 0;
+//					vbList.visible = false;
+				}
+				cbListState.selected = op;
+			}
+			
+			protected function debug( txt:String):void {
+				netDebug( "DBG GeoRSS: "+txt);	
+			}
+
+			public function netDebug( txt:String, level:int=0):void {
+				if ( level > 0) return;
+				
+				trace( txt);
+				if ( dbc != null) dbc.debug( txt, level);
+			}
+		]]>
+	</fx:Script>
+	<mx:HDividedBox id="componentPane" width="100%" height="100%" liveDragging="false" horizontalGap="6" toolTip="Click to toogle, drag to size list." horizontalAlign="left" verticalAlign="top" backgroundColor="#A0A0A0" backgroundAlpha="1.0" contentBackgroundColor="#A86969">
+		<s:Group width="100%" height="100%">
+			<s:layout>
+				<s:BasicLayout/>
+			</s:layout>
+			<maptech:Lighttable id="map" width="100%" height="100%" />
+			<mx:ProgressBar id="pbLoad" label='' fontSize="9" labelPlacement="right" alpha="0.8" toolTip="Map Load Status" color="#808080" width="200" horizontalCenter="0" top="5" height="21"/>
+			<mx:ProgressBar id="pbRefresh" mode="manual" label='' fontSize="9" labelPlacement="right" toolTip="Update Bar &amp; Counter" alpha="0.8" color="#808080" bottom="0" width="200" horizontalCenter="5"/>
+			<s:BorderContainer cornerRadius="4" backgroundAlpha="0.5" left="2" top="2" width="40" height="56">
+				<s:layout>
+					<s:VerticalLayout paddingLeft="2" paddingRight="2" paddingTop="2" paddingBottom="2" gap="2" horizontalAlign="contentJustify"/>
+				</s:layout>
+				<s:Button id="bContext" x="0" y="0" click="handleHome( event);" width="32" height="32" toolTip="Click here to customize." skinClass="de.ms_ite.skins.RssButtonSkin"/>
+				<!-- icon="@Embed(source='../assets/rss/feed-icon-28x28.png')"  -->
+				<s:HGroup verticalAlign="contentJustify" gap="2">
+					<s:Button label="+" toolTip="zoom in" buttonDown="map.zoomIn();" height="16" repeatInterval="80" repeatDelay="800" autoRepeat="true" fontSize="8" skinClass="de.ms_ite.skins.CloseButtonSkin" width="16"/>
+					<s:Button label="-" toolTip="zoom out" height="16" buttonDown="map.zoomOut();" repeatInterval="80" repeatDelay="800" autoRepeat="true" skinClass="de.ms_ite.skins.CloseButtonSkin" width="16"/>			
+				</s:HGroup>		
+			</s:BorderContainer>
+		</s:Group>
+		<s:BorderContainer id="vbList" height="100%" width="250" backgroundColor="#F0F0F0" contentBackgroundColor="#E0E0E0" borderVisible="false">
+			<s:layout>
+				<s:VerticalLayout gap="2" paddingLeft="1" paddingRight="1" paddingTop="1" paddingBottom="1"/>
+			</s:layout>
+			<s:HGroup width="100%" verticalAlign="middle" paddingLeft="4" paddingRight="20" paddingTop="1">
+				<s:Label text="Sort by"/>
+				<s:DropDownList id="cSortOrder" change="onChangeSortOrder( event);" width="100%" minWidth="100" selectedIndex="0">
+					<mx:ArrayCollection>
+						<mx:source>					
+							<fx:Object label="Feed order" data="feed_up"/>
+							<fx:Object label="Feed reverse" data="feed_dn"/>
+							<fx:Object label="Title up" data="title_up"/>
+							<fx:Object label="Title down" data="title_dn"/>
+							<fx:Object label="Date up" data="date_up"/>
+							<fx:Object label="Date down" data="date_dn"/>
+						</mx:source>
+					</mx:ArrayCollection>
+				</s:DropDownList>
+			</s:HGroup>
+			<mx:DataGrid id="rssItems" width="100%" height="100%" change="handleSelectionChange( event);" editable="false" showHeaders="false">
+				<mx:columns>
+					<!-- mx:DataGridColumn id="timeColumn" dataField="pubDate" headerText="Published" / -->
+					<mx:DataGridColumn id="msgColumn" dataField="title" headerText="Message" />
+				</mx:columns>
+			</mx:DataGrid>
+		</s:BorderContainer>
+	</mx:HDividedBox>
+	<s:CheckBox id="cbListState" right="0" top="2" click="handleListToggle( event);" toolTip="Toogle List"/>
+	<!-- s:BorderContainer id="componentPane" width="100%" height="100%" toolTip="" backgroundAlpha="0.4">
+		<s:layout>
+			<s:BasicLayout/>
+		</s:layout>
+	</s:BorderContainer -->
+	<local:FeedURLInput id="uiAddFeed" visible="false" horizontalCenter="0" top="30" />
+	<local:LoadingBlurPanel id="loadPanel" visible="true" width="100%" height="100%">
+		<local:layout>
+			<s:BasicLayout/>
+		</local:layout>
+	</local:LoadingBlurPanel>
+	<local:GeofeederAboutPanel id="aboutPanel" visible="false"  width="100%" height="100%">
+		<local:layout>
+			<s:BasicLayout/>
+		</local:layout>
+	</local:GeofeederAboutPanel>
+</s:Group>

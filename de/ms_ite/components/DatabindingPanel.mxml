@@ -1,0 +1,341 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox
+	creationComplete="initUI()" 
+	xmlns:mx="http://www.adobe.com/2006/mxml"
+	width="100%" height="100%" horizontalGap="4">
+<mx:Script>
+        <![CDATA[
+        	import de.ms_ite.components.TableSheet;
+        	import de.ms_ite.maptech.symbols.*;
+
+        	import mx.core.*;
+            import mx.events.*;
+            import mx.containers.*;
+        	import mx.controls.*;
+        	import mx.controls.dataGridClasses.*;
+			import mx.managers.*;
+        	import mx.collections.*;
+            import mx.rpc.events.ResultEvent;
+            import mx.rpc.events.FaultEvent;
+            import mx.utils.ArrayUtil;
+        	
+        	public var _columns:Array;
+        	
+        	public var _sheet:TableSheet;
+        	protected var _stack:TableSheetStack;
+        	
+        	protected var rowIndex:int = -1;
+        	public var result:Array;
+        	
+        	public var colButton:UIComponent;
+        	
+        	protected function initUI():void {
+        		sheet = null;
+        	}
+        	
+        	public function set sheet( s:TableSheet):void {
+        		debug( "sheet.");
+        		
+        		colButton = null;
+        		
+        		_sheet = s;
+        		if ( _sheet != null) {
+        			if ( _sheet.table.columns.length > 0) columns = _sheet.table.columns;
+
+	        		minScale.value = _sheet.style.data.scaleMin;
+	        		maxScale.value = _sheet.style.data.scaleMax;
+	        		visMode.selectedItem = _sheet.style.data.vis_fx;
+	        		visScale.value = _sheet.style.data.vis_scale;
+	        		visLabels.selectedItem = _sheet.style.data.vis_labels;
+	        		
+	        		colorFrom.selectedColor = _sheet.style.data.colorFrom;
+	        		colorTo.selectedColor = _sheet.style.data.colorTo;
+        		}
+        	}
+        	
+        	public function get sheet():TableSheet {
+        		return _sheet;
+        	}
+        	
+        	public function set stack( st:TableSheetStack):void {
+        		
+        		if ( _stack == st) return;
+        		
+        		if ( _stack != null) _stack.removeEventListener( Event.CHANGE, handleStackChanged); 
+        		_stack = st;
+        		_stack.addEventListener( Event.CHANGE, handleStackChanged);
+        	}
+
+        	public function get stack():TableSheetStack {
+        		return _stack;
+        	}
+        	
+        	protected function handleStackChanged( evt:Event):void {
+        		sheet = _stack.topSheet;
+        		columns = ( _stack.topSheet != null) ? _stack.topSheet.table.columns : null;
+        	}
+        	
+        	public function set columns( c:Array):void {
+        		debug( "set columns");
+        		_columns = c;
+        		bLabelColumn.enabled = bColumnsScale.enabled = bColumnsVis.enabled = ( c != null) ? (c.length > 0) : false;
+			}
+        	
+        	public function get columns():Array {
+        		return _columns;
+        	}
+        	
+        	protected function matchColumn( header:String):String {
+        		
+				var cols:Array = _sheet.table.columns;
+				var dataField:String = '';
+				for( var i:int=0; i < cols.length; i++) {
+					if ( cols[i].headerText == header) {
+						dataField = cols[i].dataField;
+						break;
+					}
+				}
+				debug( "found dataField("+header+"): "+dataField);
+				
+				return dataField;
+        	}
+        	
+			private function handleColumnChange( evt:MenuEvent):void  {
+				debug( "menu_changed: "+evt.index+"/"+evt.label+" / "+evt.item.toggled);
+				var i:int;
+				var dgc:DataGridColumn;
+				var sDataField:String;
+				var dataField:String = matchColumn( evt.label);
+				
+				switch( colButton) {
+					case bLabelColumn:
+						// label
+						debug( "label");
+						if ( _sheet.style.data.labelField == dataField) {
+							dataField = '';
+						} 
+						_sheet.style.data.labelField = dataField;
+					break;
+
+					case bColumnsScale:
+						// scale
+						debug( "scale");
+						var min:Number = -1;
+						var max:Number = -1;
+	
+						if ( _sheet.style.data.scaleField == dataField) {
+							// disable
+							dataField = '';
+						} else {
+	//						var cols:Array = _sheet.table.columns;						
+							var dp:ListCollectionView = _sheet.dataProvider;
+							
+							for( i = 0; i < dp.length; i++) {
+								var row:Object = dp.getItemAt( i);
+								/*
+								for( var s:String in row) {
+									debug( "    "+s+" = "+row[s]);
+								}
+								debug( "  mm: "+row.hasOwnProperty( dataField)+" / "+( row[ dataField] is Number));
+								*/
+								if ( row.hasOwnProperty( dataField)) {
+									var val:Number = ( row[ dataField] is Number) ? row[ dataField] as Number : parseFloat( row[ dataField]);
+									if ( min == -1 || min > val) min = val;
+									if ( max == -1 || max < val) max = val;
+								}
+							}
+						}
+							
+						_sheet.style.data.scaleField = dataField;
+						colMin.text = ''+min;
+						_sheet.style.data.scaleRowMin = min;
+						colMax.text = ''+max;
+						_sheet.style.data.scaleRowMax = max;					
+						debug( "set field: '"+dataField+"'");
+					break;
+					
+					case bColumnsVis:
+						// fx
+						debug( "fx");
+						var fields:Array = ( _sheet.style.data.vis_fields != '') ? _sheet.style.data.vis_fields.split(',') : new Array();
+						
+						i = 0;
+						var found:Boolean = false;
+						while( i < fields.length) {
+							if ( dataField == fields[i]) {
+								found = true;
+	//							debug( "found: "+evt.item.toggled);
+								if ( evt.item.toggled) {
+									break;
+								} else {
+	//								debug( "  remove: "+i);
+									fields.splice( i, 1);
+	//								debug( "    flds: "+fields);
+									break;
+								}
+							}
+							i++;
+						}
+						if ( ! found) fields.push( dataField);
+						_sheet.style.data.vis_fields = fields.join(',');
+						debug( "set fields: "+fields.join(','));
+						
+						if ( fields.length == 0) visMode.selectedItem = 'none';
+						visMode.enabled = fields.length > 0;
+					break;
+				}
+				colButton = null;
+				
+				dispatchEvent( new Event( Event.CHANGE));
+			}
+			
+			private function openColumnSelector( evt:Event):void {
+				
+				var cols:Array = new Array();
+				var dgc:DataGridColumn;
+				
+				var fields:Array = _sheet.style.data.vis_fields.split(',');
+
+				for (var i:int=0; i < _columns.length; i++)  {
+					dgc = _columns[i];
+					
+					var temp:Object = new Object();
+					temp.label = dgc.headerText;
+					var dataField:String = dgc.dataField;
+					
+					switch( evt.target) {
+						case bLabelColumn:
+							temp.type = 'radio';
+							temp.groupName = 'fxColsGroup';
+							temp.toggled = (_sheet.style.data.labelField == dataField);
+						break;
+
+						case bColumnsScale:
+							temp.type = 'radio';
+							temp.groupName = 'fxColsGroup';
+							temp.toggled = (_sheet.style.data.scaleField == dataField);
+						break;
+						
+						case bColumnsVis:
+							temp.type = 'check';
+							var tt:Boolean = false;
+							for( var j:int=0; j < fields.length; j++) {
+								if ( dataField == fields[ j]) {
+									tt = true;
+									break;
+								}	
+							}
+							temp.toggled = tt;
+						break;
+					}
+					
+					cols.push( temp);
+				}
+				colButton = UIComponent( evt.target);
+				
+				var menu:Menu = Menu.createMenu( this, cols, true);
+				menu.addEventListener( MenuEvent.ITEM_CLICK, handleColumnChange);
+				
+				var p:Point = new Point( evt.target.x, evt.target.y);
+				
+				p = evt.target.parent.localToGlobal( p);
+//				p = this.globalToLocal( p);
+
+				menu.show();
+				menu.move( p.x + evt.target.width, p.y);
+			}
+			
+			protected function changeMinScale( evt:Event):void {
+				_sheet.style.data.scaleMin = minScale.value;
+				debug( "min: "+minScale.value);
+        		dispatchEvent( new Event( Event.CHANGE));
+			}
+
+			protected function changeMaxScale( evt:Event):void {
+				_sheet.style.data.scaleMax = maxScale.value;
+				debug( "max: "+maxScale.value);
+        		dispatchEvent( new Event( Event.CHANGE));
+			}
+			
+			protected function changeVis( evt:Event):void {
+				_sheet.style.data.vis_fx = visMode.selectedItem as String;
+				visLabels.enabled = visScale.enabled = visMode.selectedIndex != 0;
+        		dispatchEvent( new Event( Event.CHANGE));
+			}
+			
+			protected function changeVisScale( evt:Event):void {
+				_sheet.style.data.vis_scale = visScale.value;
+        		dispatchEvent( new Event( Event.CHANGE));
+			}
+			
+			protected function changeVisLabels( evt:Event):void {
+				_sheet.style.data.vis_labels = String( visLabels.selectedItem);
+        		dispatchEvent( new Event( Event.CHANGE));
+			}
+			
+			protected function handleColor( evt:Event):void {
+				switch( evt.target) {
+					case colorFrom: _sheet.style.data.colorFrom = colorFrom.selectedColor; break;
+					case colorTo: _sheet.style.data.colorTo = colorTo.selectedColor; break;
+				}
+				
+        		dispatchEvent( new Event( Event.CHANGE));
+			}
+			
+			protected function debug( txt:String):void {
+//				trace( "DBG DBP: "+txt);
+			}
+        ]]>
+    </mx:Script>
+	<mx:Form height="100%" id="panelScale" label="Scale" paddingLeft="4" paddingRight="4" paddingTop="4" paddingBottom="4">
+		<mx:FormHeading label="Scaling"/>
+		<mx:FormItem label="Column">
+			<mx:Button label="select" id="bColumnsScale" click="openColumnSelector( event);" toolTip="Select column used for symbol scale." enabled="false"/>
+		</mx:FormItem>
+		<mx:FormItem label="Min. Value">
+			<mx:TextInput id="colMin" editable="false" toolTip="Minimum value in selected column." width="100"/>
+		</mx:FormItem>
+		<mx:FormItem label="Min. Scale">
+			<mx:HSlider tickInterval="0.05" change="changeMinScale( event);" id="minScale" minimum="0.2" maximum="1" snapInterval="0.05" toolTip="Select scale for row-minimum." width="100"/>
+		</mx:FormItem>
+		<mx:FormItem label="Max. Value">
+			<mx:TextInput editable="false" id="colMax" toolTip="Maximum value in selected column." width="100"/>
+		</mx:FormItem>
+		<mx:FormItem label="Max. Scale">
+			<mx:HSlider tickInterval="0.25" change="changeMaxScale( event);" minimum="1" maximum="5" snapInterval="0.25" id="maxScale" toolTip="Select scale for row-maximum." width="100"/>
+		</mx:FormItem>
+		<mx:FormItem label="Label Column">
+			<mx:Button label="select" id="bLabelColumn" click="openColumnSelector( event);" enabled="false"/>
+		</mx:FormItem>
+	</mx:Form>
+	<mx:Form height="100%" paddingBottom="4" paddingLeft="4" paddingRight="4" paddingTop="4">
+		<mx:FormItem height="72">
+			<mx:Spacer/>
+		</mx:FormItem>
+		<mx:FormItem label="color">
+			<mx:ColorPicker id="colorFrom" change="handleColor( event);"/>
+		</mx:FormItem>
+		<mx:FormItem height="18">
+			<mx:Spacer/>
+		</mx:FormItem>
+		<mx:FormItem label="color">
+			<mx:ColorPicker id="colorTo" change="handleColor( event);"/>
+		</mx:FormItem>
+	</mx:Form>
+	<mx:VRule height="100%" width="1"/>
+	<mx:Form label="Visual" height="100%" id="panelVis" paddingBottom="4" paddingLeft="4" paddingRight="4" paddingTop="4">
+		<mx:FormHeading label="Charting"/>
+		<mx:FormItem label="Columns" id="fiColVis">
+			<mx:Button label="select" id="bColumnsVis" click="openColumnSelector( event);" toolTip="Select columns used for chart display." enabled="false"/>
+		</mx:FormItem>
+		<mx:FormItem label="Visual">
+			<mx:ComboBox id="visMode" dataProvider="['none','pie','column','bar']" change="changeVis( event);" toolTip="Select chart type." enabled="false"></mx:ComboBox>
+		</mx:FormItem>
+		<mx:FormItem label="Scale">
+			<mx:HSlider minimum="0.4" maximum="1.6" snapInterval="0.1" tickInterval="0.1" id="visScale" change="changeVisScale( event);" enabled="false" width="100"/>
+		</mx:FormItem>
+		<mx:FormItem label="Labels">
+			<mx:ComboBox id="visLabels" dataProvider="['off','data','name','both']" enabled="false" change="changeVisLabels( event);" />
+		</mx:FormItem>
+	</mx:Form>
+</mx:HBox>

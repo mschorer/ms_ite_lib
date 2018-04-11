@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Panel title="Rename Column" xmlns:mx="http://www.adobe.com/2006/mxml" layout="horizontal">
+	<mx:Script>
+		<![CDATA[
+			import mx.controls.dataGridClasses.DataGridColumn;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			
+			public var column:DataGridColumn;
+			
+			public function set text( txt:String):void {
+				tiName.text = txt;
+			}
+			
+			public function get text():String {
+				return tiName.text;
+			}
+			
+			public function clickOk():void {
+				dispatchEvent( new CloseEvent( CloseEvent.CLOSE, false, false, Alert.OK));
+				visible = false;	
+			}
+			
+			public function clickCancel():void {
+				dispatchEvent( new CloseEvent( CloseEvent.CLOSE, false, false, Alert.CANCEL));
+				visible = false;	
+			}
+		]]>
+	</mx:Script>
+	<mx:VBox width="100%" height="100%" verticalGap="4">
+		<mx:Form width="100%" height="100%" paddingBottom="2" paddingLeft="2" paddingRight="2" paddingTop="2">
+			<mx:FormItem label="Name:">
+				<mx:TextInput id="tiName" enter="clickOk();"/>
+			</mx:FormItem>
+		</mx:Form>
+		<mx:ControlBar width="100%" horizontalAlign="right" paddingBottom="2" paddingLeft="2" paddingRight="2" paddingTop="2">
+			<mx:Button label="Cancel" id="bCancel" click="clickCancel();"/>
+			<mx:Button label="Ok" click="clickOk();"/>
+		</mx:ControlBar>
+	</mx:VBox>
+</mx:Panel>

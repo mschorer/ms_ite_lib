@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox 
+	xmlns:mx="http://www.adobe.com/2006/mxml" 
+	xmlns:msite="de.ms_ite.components.*"
+	creationComplete="buildUI()"
+	width="400" height="300">
+	
+	<mx:Script>
+		<![CDATA[
+		
+			import flash.events.*;
+			import flash.ui.*;
+			
+        	import mx.core.*;
+            import mx.events.*;
+            import mx.containers.*;
+        	import mx.controls.*;
+        	import mx.collections.*;
+        	import mx.managers.*;
+
+            import de.ms_ite.*;
+            import de.ms_ite.tools.*;
+            import de.ms_ite.events.*;
+            import de.ms_ite.maptech.symbols.*;
+            import de.ms_ite.maptech.symbols.styles.*;
+            import de.ms_ite.components.*;
+            import de.ms_ite.maptech.containers.*;
+
+			public var topSheet:TableSheet;
+
+			protected var editStyle:Panel;
+			protected var styleEdit:StyleEditor;
+			
+			protected var _map:Lighttable;
+			
+//			protected var chgCols:Button;	//, bStyle:Button;
+						
+			protected function buildUI():void {
+				debug( "buildUI");
+		    	sheets.addEventListener( Event.CHANGE, handleTabChange);
+//		    	sheets.addEventListener( IndexChangedEvent.CHILD_INDEX_CHANGE, handleSheetChange);
+				sheets.addEventListener( ViewNavEvent.TAB_CLOSE, askDelete);		    	
+				sheets.addEventListener( ViewNavEvent.TAB_NEW, handleNewSheet);
+				
+				sheets.addEventListener( DragEvent.DRAG_DROP, dragDropHandler);
+				sheets.addEventListener( DragEvent.DRAG_ENTER, dragDropEnter);
+				sheets.addEventListener( DragEvent.DRAG_EXIT, dragDropExit);
+
+	    		editStyle = new Panel();
+	    		editStyle.title = 'Style ...';
+	    		editStyle.autoLayout = true;
+//	    		editStyle.showCloseButton=false;
+//				editStyle.width = 390;
+//				editStyle.height = 370;
+				editStyle.visible = false;
+				PopUpManager.addPopUp( editStyle, parent);
+				
+				styleEdit = new StyleEditor();
+				editStyle.addChild( styleEdit);
+
+	    		styleEdit.addEventListener( Event.CHANGE, handleSetStyle);
+	    		styleEdit.addEventListener( CloseEvent.CLOSE, function(evt:CloseEvent):void { editStyle.visible = false; });
+	    		styleEdit.addEventListener( Event.CANCEL, function(evt:Event):void { editStyle.visible = false; });	    		
+			}
+			
+			//----------------------------------------------------------
+			
+			public function set map( m:Lighttable):void {
+				_map = m;
+				var sht:Array = sheets.getChildren();
+				for( var i:int = 0; i < sht.length; i++) {
+					TableSheet( sht[i]).map = _map;
+				}
+			}
+			
+			public function get map():Lighttable {
+				return _map;
+			}
+
+			private function openColumnDialog( x:int, y:int):void {
+				topSheet.toggleColumnDialog( this, x, y);
+			}
+
+			// -------------------- d&d ----------------------------
+			
+           private function dragDropEnter(event:DragEvent):void {
+           		debug( "dragEnter "+event.currentTarget);
+                var dropTarget:ViewNavigator = event.currentTarget as ViewNavigator;
+    
+                if ( event.dragSource.hasFormat('items')) {
+                	debug( "accept 'drop items' @ "+dropTarget);
+                    DragManager.acceptDragDrop( dropTarget);
+                }
+            }
+
+            
+            private function dragDropExit(event:DragEvent):void {
+            	debug( "drag exit");
+            }   
+            
+			private function dragDropHandler(event:DragEvent):void {
+				debug( "drop on stack");
+				if ( event.dragSource.hasFormat("items")) {
+					
+					var devt:DragEvent = DragEvent( event.clone());					
+					
+					debug( "create sheet");
+					var temp:TableSheet = newSheet();
+
+					debug( "reroute drop event");
+					temp.table.dispatchEvent( devt);						
+				}
+			}
+            
+			// -------------------- sheets ----------------------------
+	        	
+			public function newSheet( basename:String = 'Sheet'):TableSheet {
+				var temp:TableSheet = new TableSheet( this);
+				var chnodes:Array = sheets.getChildren();
+				var shId:int = 0;
+				
+				var notunique:Boolean = true;
+				temp.label = basename;
+				while( notunique) {
+					notunique = false;
+					for( var i:int=0; i < chnodes.length; i++) {
+						if ( chnodes[ i].label == temp.label) {
+							notunique = true;
+							break;
+						}
+					}
+					if ( ! notunique) break;
+					
+					temp.label = basename+' '+shId;
+					shId++;
+				}
+				temp.map = _map;
+//				temp.symbolClass = de.ms_ite.symbols.AirSymbol;
+				sheets.addChild( temp);
+		    	temp.addEventListener( Event.SELECT, symbolClicked);
+		    	temp.addEventListener( TableSheetEvent.TS_ZOOM_ALL, handleZoomSheet);
+		    	temp.addEventListener( TableSheetEvent.TS_ZOOM_ITEM, handleZoomRow);
+		    	temp.addEventListener( Event.CHANGE, handleSheetChange);
+	
+				sheets.selectedChild = temp;
+				setActiveSheet( temp);
+
+//				bStyle.enabled = true;
+				
+				return temp;
+			}
+			
+		    private function symbolClicked( evt:Event):void {
+//		    	debug( "click: "+Sym( topSheet.layer.selectedSymbol).url);
+		    }
+/*
+			protected function handleSheetChanged( evt:Event):void {
+				debug( "change");
+				if ( topSheet == evt.target) {
+					setActiveSheet( topSheet);
+				}
+				dispatchEvent( evt);
+			}
+*/			
+			public function setActiveSheet( sheet:TableSheet):void {
+				debug( "set active sheet");
+				topSheet = sheet;								
+				dispatchEvent( new IndexChangedEvent( IndexChangedEvent.CHANGE));
+			}
+
+			protected function handleNewSheet( evt:ViewNavEvent):void {
+				newSheet( 'new');
+			}
+			
+			protected function askDelete( evt:ViewNavEvent):void {
+				Alert.show( 'Are you sure to delete sheet "'+Object( evt).item.label+'"?', 'Delete sheet?', Alert.OK | Alert.CANCEL, sheets, delSheet);
+			}
+			
+			public function delSheet( evt:CloseEvent):void {
+				debug( "dle: "+evt.toString());
+				if ( evt.detail == Alert.OK) {
+					var temp:TableSheet = topSheet;
+					debug( "remove sheet: "+temp);
+			    	temp.removeEventListener( Event.SELECT, symbolClicked);
+			    	temp.removeEventListener( ContextMenuEvent.MENU_ITEM_SELECT, handleZoomSheet);
+			    	temp.removeEventListener( Event.CHANGE, handleSheetChange);
+					temp.map = null;
+					sheets.removeChild( temp);
+
+//					bStyle.enabled = sheets.getChildren().length > 0;
+
+					var aSheet:TableSheet = TableSheet( sheets.selectedChild);
+					if ( aSheet != null) setActiveSheet( aSheet);
+					else {
+						if ( sheets.numChildren > 0) setActiveSheet( TableSheet( sheets.getChildAt( 0)));
+						else setActiveSheet( null);
+					}
+				}
+			}
+			
+		    private function handleTabChange( evt:IndexChangedEvent):void {
+		    	debug( "index changed: "+evt.toString());
+				setActiveSheet( TableSheet( sheets.selectedChild));	    	
+		    	_map.toFront( topSheet.layer);
+				
+		    	debug( "sheet: "+topSheet);
+		    }
+
+		    private function handleSheetChange( evt:Event):void {
+		    	debug( "sheet changed: "+evt.toString());
+				
+		    	debug( "  deliver: "+(topSheet == evt.target));
+				if ( evt.target == topSheet) dispatchEvent( new Event( Event.CHANGE));
+		    }
+
+		    private function handleZoomSheet( evt:TableSheetEvent):void {
+		    	debug( "zoom2sheet: "+evt.toString());
+		    	topSheet.zoom();
+		    }
+
+		    private function handleZoomRow( evt:TableSheetEvent):void {
+		    	debug( "zoom2row: "+evt.toString());
+		    	topSheet.zoomItem( evt.item);
+		    }
+
+		    private function handleSetStyle( evt:Event):void {
+	    		if ( topSheet != null) topSheet.style = topSheet.style;
+		    }
+		    
+		    public function openStyleEdit( parent:DisplayObject, x:int, y:int):void {
+		    	debug( "style: "+topSheet.style);
+
+				styleEdit.style = topSheet.style;
+
+				editStyle.visible = true;
+				editStyle.move( x, y);
+		    }
+
+            public function addData( resultset:Array):void {
+        		if ( topSheet != null && topSheet.columnsMatch( resultset)) topSheet.addData( resultset);
+            	else {
+            		var temp:TableSheet = newSheet( 'sheet');
+            		topSheet.setData( resultset);
+            	}
+				topSheet.stripColumns();            	
+//				topSheet.spaceEqually();            	
+
+				topSheet.zoom();
+
+				setActiveSheet( topSheet);
+            }
+            
+            public function pasteClipboard( sheet:TableSheet):Boolean {
+            	debug( "paste clipboard");
+            	return true;
+            }
+            
+            public function hasSheets():Boolean {
+            	return ( sheets.getChildren().length > 0);
+            }
+
+	     	public function toData( buffer:ByteArray):XML  {
+				var temp:XML = <sheets></sheets>
+				
+				var ch:Array = sheets.getChildren();
+				for( var i:int = 0; i < ch.length; i++) {
+					var sh:XML = TableSheet( ch[i]).toData( buffer);
+					sh.@name = ch[i].label;
+					temp.appendChild( sh);
+				}
+				
+				return temp;
+			}
+	
+	     	public function fromData( xml:XMLList, buffer:ByteArray, base:int):void  {
+				for each( var sheet:XML in xml.sheet) {
+					var temp:TableSheet = newSheet( sheet.@name);
+					temp.fromData( sheet, buffer, base);
+				}
+	     	}
+
+	     	public function toXML():XML  {
+				var temp:XML = <sheets></sheets>
+				
+				var ch:Array = sheets.getChildren();
+				for( var i:int = 0; i < ch.length; i++) {
+					var sh:XML = TableSheet( ch[i]).toXML();
+					sh.@name = ch[i].label;
+					temp.appendChild( sh);
+				}
+				
+				return temp;
+			}
+	
+	     	public function fromXML( xml:XMLList):void  {
+				for each( var sheet:XML in xml.sheet) {
+					var temp:TableSheet = newSheet( sheet.@name);
+					temp.fromXML( sheet);
+				}
+	     	}
+
+		    protected function debug( txt:String):void {
+		    	trace( "DBG TSS: "+txt);
+		    }
+		]]>
+	</mx:Script>
+    <msite:ViewNavigator width="100%" height="100%" id="sheets">
+	</msite:ViewNavigator>
+</mx:VBox>

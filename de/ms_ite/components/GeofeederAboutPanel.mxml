@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:BorderContainer 
+	xmlns:fx="http://ns.adobe.com/mxml/2009" 
+	xmlns:s="library://ns.adobe.com/flex/spark" 
+	xmlns:mx="library://ns.adobe.com/flex/mx"
+	creationComplete="handleCreate( event);" 
+	width="100%" height="100%"
+	backgroundAlpha="0.4"
+	borderColor="#000000"
+	backgroundColor="#FFFFFF" color="#000000">
+	<s:layout>
+		<s:BasicLayout/>
+	</s:layout>
+	<fx:Script>
+		<![CDATA[
+			import mx.events.CloseEvent;
+			
+			import spark.filters.BlurFilter;
+			
+			protected var df:BlurFilter = new BlurFilter();
+			
+			protected function handleCreate( evt:Event):void {
+			    var styleSheet:StyleSheet = new StyleSheet();
+			    styleSheet.setStyle("a:link", { textDecoration: "underline" });
+			    styleSheet.setStyle("a:hover", { textDecoration: "underline" });
+			    styleSheet.setStyle("a:active", { textDecoration: "underline" });
+			    styleSheet.setStyle("h1", { fontSize: 13, fontWeight: 'bold' });
+//			    about.styleSheet = styleSheet;
+			}
+			
+			override public function set visible( state:Boolean):void {
+				/*
+				if ( parent != null) {
+					if ( state) GeoFeedReader( parent.parent.parent.parent).componentPane.filters = [ df];
+					else GeoFeedReader( parent.parent.parent.parent).componentPane.filters = [];
+				}
+				*/
+				super.visible = state;
+			}
+			
+			public function set title( s:String):void {
+				tw.title = s;
+			}
+			
+			protected function closeHandler( evt:Event):void {
+				visible = false;
+			}
+		]]>
+	</fx:Script>
+	<s:TitleWindow id="tw" horizontalCenter="0" verticalCenter="0" close="closeHandler(event)" cornerRadius="4">
+		<s:layout>
+			<s:VerticalLayout paddingLeft="2" paddingRight="2" paddingTop="2" paddingBottom="2" horizontalAlign="center"/>
+		</s:layout>
+		<!-- s:TextArea id="about" editable="false" enabled="true" width="220" height="100" selectable="false" borderVisible="false" text="ein langer">
+			<s:TextFlow>
+					by <s:a href="mailto:ms@ms-ite.de">ms@ms-ite.de</s:a>
+					Based on <s:span>maptech</s:span>, the AS3 mapping engine. <s:a href="http://www.alrightythen.de/blog/2008/12/georss-viewer-in-air/">More ...</s:a>
+			</s:TextFlow>
+		</s:TextArea -->
+		<s:RichEditableText id="about" editable="true" enabled="true" width="220" height="100" selectable="false">
+			<s:content>
+				<s:p />
+				<s:p>by <s:a href="mailto:ms@ms-ite.de">ms@ms-ite.de</s:a></s:p>
+				<s:p />
+				<s:p>Based on <s:a href="http://www.alrightythen.de/blog/2008/12/georss-viewer-in-air/">maptech</s:a>, the AS3 mapping engine.</s:p>
+			</s:content>
+		</s:RichEditableText>
+	</s:TitleWindow>
+</s:BorderContainer>

@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox xmlns:mx="http://www.adobe.com/2006/mxml" width="360" height="340" horizontalGap="2" creationComplete="initUI();" xmlns:ns1="de.ms_ite.components.*">
+<mx:Script>
+        <![CDATA[
+        	import de.ms_ite.maptech.symbols.styles.*;
+        	import mx.core.*;
+            import mx.events.*;
+            import mx.containers.*;
+        	import mx.controls.*;
+			import mx.managers.*;
+        	import mx.collections.*;
+        	
+        	import de.ms_ite.components.*;
+        	
+			[Embed(source='de/ms_ite/assets/symbol_lib.swf#circle')]
+			[Bindable]
+			protected var symbolCircle:Class;
+			
+			[Embed(source='de/ms_ite/assets/symbol_lib.swf#cross')]
+			[Bindable]
+			protected var symbolCross:Class;
+			
+			[Embed(source='de/ms_ite/assets/symbol_lib.swf#default')]
+			[Bindable]
+			protected var symbolDefault:Class;
+			
+			[Embed(source='de/ms_ite/assets/symbol_lib.swf', symbol='hexa')]
+			[Bindable]
+			protected var symbolHexa:Class;
+			
+			[Embed(source='de/ms_ite/assets/symbol_lib.swf#square')]
+			[Bindable]
+			protected var symbolSquare:Class;
+			
+			[Embed(source='de/ms_ite/assets/symbol_lib.swf#triangle')]
+			[Bindable]
+			protected var symbolTriangle:Class;
+	
+        	public var _style:SymbolStyle;
+        	
+        	protected var normal:GeometryStyleEditor;
+        	protected var highlight:GeometryStyleEditor;
+        	protected var selected:GeometryStyleEditor;
+        	
+        	public function initUI():void {
+        		normal = new GeometryStyleEditor();
+        		normal.label = 'Normal';
+        		normal.toolTip = 'Set geometry style for normal/unselected state.';
+				styleTabs.addChild( normal);        		
+        		normal.addEventListener( Event.CHANGE, onStyleChange); 
+/*        		
+        		highlight = new GeometryStyleEditor();
+        		highlight.label = 'Over';
+				styleTabs.addChild( highlight);        		
+        		highlight.toolTip = 'Set geometry style for mouse over.';
+        		highlight.addEventListener( Event.CHANGE, onStyleChange); 
+*/
+        		selected = new GeometryStyleEditor();
+        		selected.label = 'Selected';
+        		selected.toolTip = 'Set geometry style for selected state.';
+				styleTabs.addChild( selected);
+        		selected.addEventListener( Event.CHANGE, onStyleChange); 
+        	}
+        	        	
+        	public function set style( st:SymbolStyle):void {
+        		_style = st;
+        		iconList.selectedItem = _style.icon.icon;
+        		setIcon( _style.icon.icon);
+        		
+        		iconScale.value = _style.icon.scale;
+        		iconAlpha.value = _style.icon.alpha;
+        		cpColor.selectedColor = _style.icon.color;
+
+        		normal.style = _style.normal;
+        		selected.style = _style.selected;
+//        		highlight.style = _style.highlight;
+        		trace( "style set.");
+        	}
+        	
+        	public function get style():SymbolStyle {
+        		return _style;
+        	}
+        	
+        	public function setIcon( temp:String):void {
+        		var c:Class = null;
+				switch( temp) {
+					case 'Default': c = symbolDefault; break;
+					case 'Circle': c = symbolCircle; break;
+					case 'Square': c = symbolSquare; break;
+					case 'Triangle': c = symbolTriangle; break;
+					case 'Hexa': c = symbolHexa; break;
+					case 'Cross': c = symbolCross; break;
+				}
+				if ( c != null) preview.source = c;
+        	}
+        	
+        	private function switchIcon( evt:Event):void {
+        		var temp:String = String(iconList.selectedItem);
+        		trace( "switchIcon: "+temp);
+				setIcon( temp);
+        		_style.icon.icon = temp;
+        		dispatchEvent( new Event( Event.CHANGE));
+        	}
+
+        	private function changeIconScale( evt:Event):void {
+        		_style.icon.scale = iconScale.value;
+        		dispatchEvent( new Event( Event.CHANGE));
+        	}
+
+        	private function changeIconAlpha( evt:Event):void {
+        		_style.icon.alpha = iconAlpha.value;
+        		dispatchEvent( new Event( Event.CHANGE));
+        	}
+
+        	private function colorIcon( evt:Event):void {
+        		_style.icon.color = cpColor.selectedColor;
+        		dispatchEvent( new Event( Event.CHANGE));
+        	}
+        	
+        	private function onStyleChange( event:Event):void {
+        		trace( "change: "+event.target);
+        		if ( event.type != Event.CHANGE) return;
+
+        		dispatchEvent( new Event( Event.CHANGE));
+        	}
+        	
+        	private function postChange( evt:Event):void {
+/*        		if ( evt.target == bCancel) dispatchEvent( new Event( Event.CANCEL));
+        		else 
+*/        		dispatchEvent( new CloseEvent( Event.CLOSE));
+        	}
+        ]]>
+    </mx:Script>
+	<mx:Canvas width="100" height="100" cornerRadius="5" borderColor="#A4A4A4" borderStyle="solid" backgroundColor="#979797" backgroundAlpha="1.0">
+		<mx:Image x="50" y="50" scaleContent="false" id="preview" autoLoad="true"/>
+	</mx:Canvas>
+	<mx:VBox height="100%" width="100%">
+			<mx:Form width="100%" height="135" paddingBottom="5" paddingLeft="5" paddingRight="5" paddingTop="5">
+					<mx:FormHeading label="Styles"/>
+					<mx:FormItem label="Icon">
+							<!-- mx:ComboBox id="iconList" change="switchIcon( event)" dataProvider="['symbol_default.swf','symbol_circle.swf','symbol_cross.swf','symbol_triangle.swf','symbol_square.swf','symbol_hexa.swf']"></mx:ComboBox -->
+							<mx:ComboBox id="iconList" change="switchIcon( event)" dataProvider="['Default','Circle','Cross','Triangle','Square','Hexa']"></mx:ComboBox>
+					</mx:FormItem>
+					<mx:FormItem label="Color">
+							<mx:ColorPicker id="cpColor" change="colorIcon( event);"/>
+					</mx:FormItem>
+					<mx:FormItem label="Scale">
+							<mx:HSlider minimum="0" tickInterval="0.1" maximum="2" snapInterval="0.05" id="iconScale" change="changeIconScale( event);" toolTip="Relative scale of symbol."/>
+					</mx:FormItem>
+					<mx:FormItem label="Alpha">
+							<mx:HSlider minimum="0" tickInterval="0.1" maximum="1" snapInterval="0.05" id="iconAlpha" change="changeIconAlpha( event);" toolTip="Alpha value of symbol."/>
+					</mx:FormItem>
+			</mx:Form>
+			<mx:VBox height="100%" width="100%">
+					<mx:TabNavigator width="100%" height="100%" id="styleTabs" paddingBottom="2" paddingLeft="2" paddingRight="2" paddingTop="2">
+					</mx:TabNavigator>
+			</mx:VBox>
+		<mx:ControlBar width="100%" horizontalAlign="right" paddingBottom="4" paddingLeft="4" paddingRight="4" paddingTop="4">
+			<mx:Button label="Ok" id="bOk" click="postChange( event)"/>
+		</mx:ControlBar>
+	</mx:VBox>
+</mx:HBox>

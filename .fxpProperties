@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<fxpProperties abbreviated="false" authoringTool="Flex Builder" compiles="true" parentProject="73c50735-66a5-4579-a79b-ebd32ffffd03" projectUUID="73c50735-66a5-4579-a79b-ebd32ffffd03" pureCatalystProject="false" sdkVersion="4.6.0" uuid="18f9c841-ae5f-4882-9a0e-d1c95ab853bd" version="15">
+  <projects>
+    <project filename="ExtLibs.fxpl" position="2" projectUUID="05178a50-f451-422f-8b87-7a6f1b3bfd60" uuid="18f9c841-ae5f-4882-9a0e-d1c95ab853bd"/>
+    <project filename="as3_syndicationlib.fxpl" position="3" projectUUID="71ace001-6c74-41d1-a6e8-f33573f4732e" uuid="18f9c841-ae5f-4882-9a0e-d1c95ab853bd"/>
+    <project filename="as3_corelib.fxpl" position="4" projectUUID="fb61bb8b-4381-4922-9149-2e7472b4209d" uuid="18f9c841-ae5f-4882-9a0e-d1c95ab853bd"/>
+  </projects>
+  <src/>
+  <swc>
+    <linked location="${DOCUMENTS}/ms_ite_maptech/bin/ms_ite_maptech.swc" path="${DOCUMENTS}/ms_ite_maptech/bin/ms_ite_maptech.swc" position="1" uuid="18f9c841-ae5f-4882-9a0e-d1c95ab853bd"/>
+    <linked location="sdkPlaceHolder" path="sdkPlaceHolder" position="0" uuid="18f9c841-ae5f-4882-9a0e-d1c95ab853bd"/>
+    <linked location="${DOCUMENTS}/ms_ite_maptech/bin/ms_ite_maptech.swc" path="${DOCUMENTS}/ms_ite_maptech/bin/ms_ite_maptech.swc" position="1" uuid="18f9c841-ae5f-4882-9a0e-d1c95ab853bd"/>
+  </swc>
+  <misc/>
+  <theme/>
+  <mxmlFormattingPrefs groupAttributesByState="true" maxLineWidth="100" mxmlAlignAttributes="true" mxmlAttributeOrder="id,userLabel,includeIn,excludeFrom,visible,x,y,z,left,right,top,bottom,width,height,minWidth,minHeight,maxWidth,maxHeight,label" mxmlKeepAttributeValuesOrganized="true"/>
+</fxpProperties>

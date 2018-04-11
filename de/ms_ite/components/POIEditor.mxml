@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox 
+	xmlns:mx="http://www.adobe.com/2006/mxml"
+	creationComplete="initUI();"
+	verticalGap="2"
+	xmlns:text="flash.text.*" width="100%" minHeight="0">
+	<mx:Script>
+		<![CDATA[
+			import mx.messaging.AbstractConsumer;
+			import mx.controls.Menu;
+			import mx.events.*;
+		
+			protected var UID:int;
+			protected var item:Object;
+			
+			protected var myMenu:Menu;
+			
+			[Bindable]
+			public var app:Object;
+			
+			protected function initUI():void {
+//				desc.toolbar.removeChild(desc.fontFamilyCombo);
+				
+//				desc.linkTextInput.width = 250;
+			}
+			
+			public function setData( obj:Object):void {
+				
+				item = obj;
+				
+				UID = obj.uid;
+				llocation.text = obj.location;
+				ttitle.text = obj.company;
+				fname.text = obj.tx_msitegis_firstname;
+				tname.text = obj.name;
+//				cat.tx_msitespdhier_icon as id_node,
+//				cat.catname,
+//				cat.uid as catid,
+//				l.title as titel,
+				email.text = obj.email;
+//				phone.text = obj.phone;
+//				l.mobile,
+				www.text = obj.www;
+				adress.text = obj.address;
+				city.text = obj.city;
+				plz.text = obj.zip;
+//				l.country,
+				image.text = obj.image;
+//				fax.text = obj.fax;
+
+//				desc.htmlText = obj.description;
+				desc.text = obj.description;
+				
+				tiSorting.text = obj.sorting;
+
+				cbHidden.selected = obj.hidden;	//( obj.hidden == '1');
+				
+				bSave.enabled = true;
+			}
+						
+			public function getData():Object {
+				
+				item.uid = UID;
+				item.location = llocation.text;
+				item.company = ttitle.text;
+				item.tx_msitegis_firstname = fname.text;
+				item.name = tname.text;
+				item.email = email.text;
+//				item.phone = phone.text;
+				item.www = www.text;
+				item.address = adress.text;
+				item.city = city.text;
+				item.zip = plz.text;
+				item.image = image.text;
+//				item.fax = fax.text;
+
+//				item.description = desc.htmlText;
+				item.description = desc.text;
+
+				item.sorting = tiSorting.text;
+
+				item.hidden = cbHidden.selected;	// ? '1' : '0'; 
+				
+				return item;
+			}
+			
+			protected function handleSave( evt:MouseEvent):void {
+				dispatchEvent( new Event( Event.CHANGE));
+			}
+			
+			protected function doSearch( evt:MouseEvent):void {
+				var hnoSplit:RegExp = new RegExp( /([^\d]*)\s*(\d?.*)/);
+				var parts:Array = hnoSplit.exec( adress.text);
+				parts.shift();
+				var street:String = parts.shift();
+				var rest:String = parts.shift();
+				
+				app.doGeoref( city.text, plz.text, street, rest);
+			}
+			
+			public function setGeorefResult( res:Array):void {
+				var mdp:Array = new Array();
+				var o:Object;
+				var results:int = ( res != null) ? res.length : 0
+
+            	switch ( results) {
+            		case 0:
+            				o = new Object();
+            				o.label = 'Referenzierung war nicht erfolgreich.';
+            				o.data = '';
+            				o.enabled = false;
+            				
+            				mdp.push( o);
+            		break;
+            		
+            		default:            		
+            			for( var i:int = 0; i < res.length; i++) {
+            				var row:Object = res[ i];
+            				
+            				o = new Object();
+            				o.label = row.q+" - "+row.plz+" "+row.gemeinde+((row.ortsteil.length > 0) ? '/' : '')+row.ortsteil+" "+row.strasse+" "+row.hausnr;
+            				o.data = row;
+            				
+            				mdp.push( o);
+            			}            		
+            	}
+            	
+        		myMenu = Menu.createMenu( this, mdp, false);
+                myMenu.labelField = "label";
+                myMenu.addEventListener( MenuEvent.ITEM_CLICK, menuHandler);
+                
+                var p:Point = new Point( bGeoref.x + bGeoref.width, bGeoref.y);
+                p = georefContainer.localToGlobal( p);
+                myMenu.show( p.x, p.y);
+            }				
+			
+            protected function menuHandler( evt:MenuEvent):void {
+            	debug( "selected: "+evt.item.data+" / "+evt.item.label);
+            	
+            	var row:Object = evt.item.data;
+				if ( row.plz.length > 0) plz.text = row.plz; 
+				if ( row.gemeinde.length > 0) {
+					if ( row.ortsteil.length > 0) city.text = row.ortsteil;
+					else city.text = row.gemeinde;
+				} 
+				if ( row.strasse.length > 0) {
+					if ( row.hausnr.length > 0) adress.text = row.strasse+' '+row.hausnr;
+					else adress.text = row.strasse;
+				} 
+				
+				item.location = llocation.text = row.zentroid;
+				app.symbolLayer.dataProvider.itemUpdated( item);
+				
+				debug( "set:Location: "+item.location);
+			}
+			
+ 			protected function debug( txt:String):void {
+ 				trace( "DBG: "+txt);
+ 			}
+		]]>
+	</mx:Script>
+	<mx:Form width="100%" height="100%" verticalGap="1" paddingBottom="2" paddingLeft="2" paddingRight="2" paddingTop="2">
+		<!-- mx:FormItem label="Category">
+			<mx:ComboBox id="category"></mx:ComboBox>
+		</mx:FormItem -->
+		<mx:FormItem label="Hidden" direction="horizontal">
+			<mx:CheckBox id="cbHidden" label=""/>
+			<mx:Label text="Sort:"  width="60" textAlign="right"/>
+			<mx:TextInput id="tiSorting" width="60" maxChars="6" restrict="0-9"/>
+		</mx:FormItem>
+		<mx:FormItem label="Title" width="100%">
+			<mx:TextInput id="ttitle" width="100%"/>
+		</mx:FormItem>
+		<mx:FormItem label="First/Last" width="100%" direction="horizontal">
+			<mx:TextInput id="fname" width="100"/>
+			<mx:TextInput id="tname" width="100%"/>
+		</mx:FormItem>
+		<mx:HRule width="100%" height="5" strokeColor="#c0c0c0"/>
+		<mx:FormItem label="Street" width="100%">
+			<mx:TextInput id="adress" width="100%"/>
+		</mx:FormItem>
+		<mx:FormItem label="PLZ/City" direction="horizontal" horizontalAlign="left" width="100%">
+			<mx:TextInput id="plz" width="60"/>
+			<mx:TextInput id="city" width="100%"/>
+		</mx:FormItem>
+		<mx:FormItem id="georefContainer" direction="horizontal" label="Location" width="100%">
+			<mx:Button label="georef" id="bGeoref" click="doSearch( event)"/>
+			<mx:Label id="llocation" width="100%" enabled="false"/>
+		</mx:FormItem>
+		<mx:HRule width="100%" height="5" strokeColor="#c0c0c0"/>
+		<mx:FormItem label="Description" width="100%">
+			<!-- mx:RichTextEditor id="desc" paddingBottom="0" paddingLeft="0" paddingRight="0" paddingTop="0" styleName="poiedit" borderStyle="none" headerHeight="0" width="100%" height="200"/ -->
+			<mx:TextArea id="desc" width="100%" height="200" editable="true" minHeight="240"/>
+		</mx:FormItem>
+		<mx:HRule width="100%" height="5" strokeColor="#c0c0c0"/>
+		<!-- mx:FormItem label="Phone">
+			<mx:TextInput id="phone" width="200"/>
+		</mx:FormItem>
+		<mx:FormItem label="Fax">
+			<mx:TextInput id="fax" width="200"/>
+		</mx:FormItem -->
+		<mx:FormItem label="eMail" width="100%">
+			<mx:TextInput id="email" width="100%"/>
+		</mx:FormItem>
+		<mx:FormItem label="Web" width="100%">
+			<mx:TextInput id="www" width="100%"/>
+		</mx:FormItem>
+		<mx:FormItem label="Image-URL" width="100%">
+			<mx:TextInput id="image" width="100%"/>
+		</mx:FormItem>
+	</mx:Form>
+	<mx:ControlBar horizontalAlign="right" width="100%" paddingBottom="2" paddingLeft="10" paddingRight="10" paddingTop="2">
+		<mx:Button id="bSave" label="Save" enabled="false" click="handleSave( event);"/>
+	</mx:ControlBar>
+</mx:VBox>

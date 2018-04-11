@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox 
+	xmlns:mx="http://www.adobe.com/2006/mxml"
+	creationComplete="initUI();" verticalGap="2">
+	<mx:Script>
+		<![CDATA[
+			import mx.core.*;
+			import mx.collections.ArrayCollection;
+			import de.ms_ite.maptech.symbols.styles.*;
+		
+			protected var UID:int;
+			protected var item:XML;
+			
+			protected var icons:Array;
+			
+			protected var iconPathMap:Object;
+			
+			protected var spIcon:Sprite;
+
+			[Bindable]
+			public var app:Object;
+			
+			[Embed(source='de/ms_ite/assets/sym_preview_back.png')]
+			[Bindable]
+			protected var imago:Class;
+			
+			protected function initUI():void {
+			}
+/*			
+			public function set iconMap( iconMap:XML):void {
+				
+				icons = new Array();
+				tlIcons.iconField = 'symbol';
+				
+				for each( var node:XML in iconMap.*) {
+					
+					var ic:Object = new Object();
+					ic.label = node.@name.toString();
+					ic.data = node.@id.toString();
+					 
+        			ic.symbol = findRoot().getIconClassFromLib( ic.data);        			
+
+        			debug( "  lib: "+ic.symbol);
+        			
+        			if ( ic.symbol != null) icons.push( ic);
+				}
+				
+				tlIcons.dataProvider = new ArrayCollection( icons);
+			}
+*/			
+			public function setIconMap( iconMap:XML, availableIcons:Object):void {
+				
+				icons = new Array();
+				tlIcons.iconField = 'symbol';
+				
+				iconPathMap = availableIcons;
+				
+				for each( var node:XML in iconMap.*) {
+					
+					var iid:String = node.@id.toString();
+					if ( iconPathMap[ iid] != undefined) {
+						var ic:Object = new Object();
+						ic.label = node.@name.toString();
+						ic.data = iid;
+						 
+	        			ic.symbol = iconPathMap[ iid];	//findRoot().getIconClassFromLib( ic.data);        			
+	
+//	        			debug( "  lib: "+ic.symbol);
+	        			
+	        			if ( ic.symbol != null) icons.push( ic);
+				     }
+				}
+				
+				tlIcons.dataProvider = new ArrayCollection( icons);
+			}
+			
+			protected function findRoot():Object {
+				var temp:Object = parent;
+				while( temp != null) {
+					if ( temp is Application) return temp;
+					temp = temp.parent;
+				}
+				return null;
+			}
+	
+			public function setData( obj:XML):void {
+				
+				item = obj;
+				bSave.enabled = ( item != null);
+				
+				UID = obj.@id;
+				tiName.text = obj.@label;
+				tiSorting.text = obj.@sorting;
+				var style:SymbolStyle = findRoot().styles[ obj.@styleid];
+				
+				if ( obj.@matchid != undefined && obj.@matchid != '') {
+					tiMatchid.text = obj.@matchid;
+					tiMatchid.enabled = false;
+					bMatchid.enabled = false;
+				} else {
+					app.getNewMatchID();
+					tiMatchid.enabled = true;
+					bMatchid.enabled = true;
+				}
+				
+				cbHidden.selected = ( obj.@hidden == '1');
+
+//				cpColor.selectedColor = style.icon.color;
+				debug( "icon: "+style.icon.icon);
+				
+				var selItem:Object = null;
+				for( var i:int = 0; i < icons.length; i++) {
+					if ( icons[ i].data == style.icon.icon) {
+						selItem = icons[ i];
+						setIcon( iconPathMap[ style.icon.icon]);	//, style.icon.color); 
+						break;
+					}
+				}
+				tlIcons.selectedItem = selItem;
+				if ( selItem != null) tlIcons.scrollToIndex( tlIcons.selectedIndex);
+			}
+			
+			protected function setIcon( tag:String /*, color:int*/):void {
+/*
+				var ict:Sprite = findRoot().getIconFromLib( tag, true);
+				if ( ict == null) ict = findRoot().getIconFromLib( tag, false);
+				
+				if ( spIcon != null) vbIcon.rawChildren.removeChild( spIcon);
+
+				if ( ict == null) return;
+*/				
+				icIcon.source = tag;
+				debug( "set icon: "+tag);				
+			}
+			
+			public function getData():XML {
+				
+				item.@label = tiName.text;
+				item.@sorting = tiSorting.text;
+				item.@hidden = cbHidden.selected ? '1' : '0';
+				item.@matchid = tiMatchid.text;
+				
+				var style:SymbolStyle = findRoot().styles[ item.@styleid];
+//				style.icon.color = cpColor.selectedColor;
+				if ( tlIcons.selectedItem != null) style.icon.icon = tlIcons.selectedItem.data;
+				
+				item.@iconid = SymbolStyle( findRoot().styles[ item.@styleid]).icon.icon;
+				
+//				findRoot().styles[ UID] = style;
+				
+				debug( "save("+item.@matchid+"): "+item.@styleid+" @ "+SymbolStyle( findRoot().styles[ item.@styleid]).icon.icon);
+				
+				return item;
+			}
+			
+			protected function getNewMatchID( evt:Event):void {
+				debug( "getNewMatch."+app);
+				if ( app) app.getNewMatchID();
+			}
+			
+			public function setMatchID( id:String):void {
+				tiMatchid.text = id;
+			}
+
+			protected function handleIconChange( evt:Event):void {
+				debug( "setIcon: "+tlIcons.selectedItem.symbol);	//+", "+cpColor.selectedColor);
+				setIcon( tlIcons.selectedItem.symbol);	//, cpColor.selectedColor);
+			}
+/*
+			protected function handleColorChange( evt:Event):void {
+				debug( "setColor: "+cpColor.value);
+				if ( spIcon.hasOwnProperty( 'bg')) {
+					var ct:ColorTransform = MovieClip( Object( spIcon).bg).transform.colorTransform;
+					if ( ct == null) ct = new ColorTransform();
+					ct.color = cpColor.selectedColor; 
+					MovieClip( Object( spIcon).bg).transform.colorTransform = ct;
+				}
+			}
+*/			
+			protected function handleSave( evt:MouseEvent):void {
+				dispatchEvent( new Event( Event.CHANGE));
+			}
+			
+			protected function debug( txt:String):void {
+				trace( "DBG catEd: "+txt);
+			}
+		]]>
+	</mx:Script>
+	<mx:Form width="100%" height="100%" verticalGap="1" paddingBottom="2" paddingLeft="2" paddingRight="2" paddingTop="2">
+		<mx:FormItem label="Hidden" direction="horizontal">
+			<mx:CheckBox id="cbHidden"/>
+			<mx:Label text="Sort:"  width="60" textAlign="right"/>
+			<mx:TextInput restrict="0-9" width="60" maxChars="6" id="tiSorting"/>
+		</mx:FormItem>
+		<mx:FormItem label="DL-ID" direction="horizontal">
+			<mx:TextInput id="tiMatchid" restrict="0-9"/>
+			<mx:Button label="get free id" id="bMatchid" click="getNewMatchID( event)"/>
+		</mx:FormItem>
+		<mx:FormItem label="Name">
+			<mx:TextInput id="tiName" width="200"/>
+		</mx:FormItem>
+		<!-- mx:FormItem label="Color">
+			<mx:ColorPicker change="handleColorChange( event)" id="cpColor"/>
+		</mx:FormItem -->
+		<mx:FormItem label="Preview">
+			<mx:Canvas backgroundColor="0xc0c0c0" id="vbIcon" width="80" height="80">
+				<mx:Image id="icBack" source="{imago}" />
+				<mx:Image id="icIcon" bottom="30" left="22"/>
+			</mx:Canvas>
+		</mx:FormItem>
+		<mx:FormItem label="Icons">
+			<mx:TileList id="tlIcons" itemRenderer="de.ms_ite.components.ImageIconRenderer" change="handleIconChange( event)" rowHeight="70" columnWidth="70" allowMultipleSelection="false" direction="horizontal" columnCount="4" rowCount="4" width="310" height="280"></mx:TileList>
+		</mx:FormItem>
+	</mx:Form>
+	<mx:ControlBar horizontalAlign="right" width="100%" paddingBottom="2" paddingLeft="10" paddingRight="10" paddingTop="2">
+		<mx:Button id="bSave" enabled="false" label="Save" click="handleSave( event);"/>
+	</mx:ControlBar>
+</mx:VBox>

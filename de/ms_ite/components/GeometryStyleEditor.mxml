@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Form xmlns:mx="http://www.adobe.com/2006/mxml" paddingBottom="5" paddingLeft="5" paddingRight="5" paddingTop="5">
+<mx:Script>
+        <![CDATA[
+        	import de.ms_ite.maptech.symbols.styles.*;
+        	import mx.core.*;
+            import mx.events.*;
+            import mx.containers.*;
+        	import mx.controls.*;
+			import mx.managers.*;
+        	import mx.collections.*;
+        	
+        	public var _style:GeometryStyle;
+        	
+        	public function set style( st:GeometryStyle):void {
+        		_style = st;
+        		lineColor.selectedColor = _style.line.color;
+        		lineAlpha.value = _style.line.alpha;
+        		lineWidth.value = _style.line.width;
+
+        		surfaceColor.selectedColor = _style.surface.color;
+        		surfaceAlpha.value = _style.surface.alpha;
+        		trace( "style set.");
+        	}
+        	
+        	public function get style():GeometryStyle {
+        		return _style;
+        	}
+
+        ]]>
+    </mx:Script>
+	<mx:FormItem label="Line">
+			<mx:ColorPicker id="lineColor" change="_style.line.color=lineColor.selectedColor; dispatchEvent( new Event( Event.CHANGE));" />
+	</mx:FormItem>
+	<mx:FormItem label="Alpha">
+			<mx:HSlider id="lineAlpha" minimum="0.1" maximum="1" tickInterval="0.05" change="_style.line.alpha=lineAlpha.value; dispatchEvent( new Event( Event.CHANGE));" toolTip="Select border alpha." snapInterval="0.05"/>
+	</mx:FormItem>
+	<mx:FormItem label="Width">
+			<mx:HSlider id="lineWidth" minimum="1" maximum="10" tickInterval="1" change="_style.line.width=lineWidth.value; dispatchEvent( new Event( Event.CHANGE));"  toolTip="Select border width." snapInterval="1"/>
+	</mx:FormItem>
+	<mx:FormItem label="Surface">
+			<mx:ColorPicker id="surfaceColor"  change="_style.surface.color=surfaceColor.selectedColor; dispatchEvent( new Event( Event.CHANGE));" />
+	</mx:FormItem>
+	<mx:FormItem label="Alpha">
+			<mx:HSlider id="surfaceAlpha" minimum="0" maximum="1" change="_style.surface.alpha=surfaceAlpha.value; dispatchEvent( new Event( Event.CHANGE));" toolTip="Select surface alpha." tickInterval="0.05" snapInterval="0.05"/>
+	</mx:FormItem>
+	
+</mx:Form>

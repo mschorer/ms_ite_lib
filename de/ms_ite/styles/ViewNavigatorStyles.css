@@ -1,0 +1,117 @@
+/* Overriding Halo defaults with modified Halo TabSkin AS file
+ */
+
+
+
+/* These styles are important! Without them the SuperTabNavigator will 
+   look pretty crappy.
+ */
+	ViewNavigator {
+		viewNavPopupButtonStyleName: "popupButton";
+		tabStyleName: "firefoxLikeTabs";
+		leftButtonStyleName: "leftButton";
+		rightButtonStyleName: "rightButton";
+		viewNavCloseButtonStyleName: "closeTabButton";
+		newTabButtonStyleName: "newTabButton";
+		buttonWidth:20px;	
+	}
+	
+	.leftButton {
+		icon: Embed("de/ms_ite/assets/tab_assets.swf#left_arrow");
+		fillAlphas: 1, 1, 1, 1;
+		cornerRadius:0;
+	}
+	
+	.rightButton {
+		icon: Embed("de/ms_ite/assets/tab_assets.swf#right_arrow");
+		fillAlphas: 1, 1, 1, 1;
+		cornerRadius:0;
+	}
+	
+	.closeTabButton {
+		upSkin: Embed("de/ms_ite/assets/tab_assets.swf#firefox_close_up");
+		downSkin: Embed("de/ms_ite/assets/tab_assets.swf#firefox_close_down");	
+		overSkin: Embed("de/ms_ite/assets/tab_assets.swf#firefox_close_over");
+		disabledSkin: Embed("de/ms_ite/assets/tab_assets.swf#firefox_close_disabled");		
+	}
+	
+	.newTabButton {
+		highlightAlphas: 0.52, 0.4;
+		fillAlphas: 1, 1;
+	   	fillColors: #80e080, #70c070, #c0ffc0, #a0f0a0;
+	   	backgroundColor: #00ff00;
+	   	borderColor: #999999;
+	   	color: #000000;
+	   	textAlign: "left";
+	   	paddingLeft: 2;
+	   	paddingRight: 2;
+		upSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		downSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");	
+		overSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");	
+		disabledSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");		
+	}
+	
+	.popupButton {
+		highlightAlphas: 0.52, 0.4;
+		fillAlphas: 1, 1;
+	   	fillColors: #c0c0c0, #e0e0e0;
+	   	backgroundColor: #ffffff;
+	   	borderColor: #999999;
+	   	color: #000000;
+	   	textRollOverColor: #000000;	
+	   	textAlign: "left";
+		upSkin: ClassReference("de.ms_ite.skins.TabPopUpButtonSkin");
+		popUpDownSkin: ClassReference("de.ms_ite.skins.TabPopUpButtonSkin");	
+		popUpOverSkin: ClassReference("de.ms_ite.skins.TabPopUpButtonSkin");	
+		disabledSkin: ClassReference("de.ms_ite.skins.TabPopUpButtonSkin");		
+	}
+	
+	.firefoxLikeTabs {
+		highlightAlphas: 0.52, 0.4;
+		fillAlphas: .5,.5,.5,.5;
+	   	fillColors: #c0c0c0, #a0a0a0;
+	   	backgroundColor: #ffffff;
+	   	borderColor: #999999;
+	   	color: #000000;
+	   	textRollOverColor: #102010;	
+	   	textAlign: "left";
+	   	indicatorClass: Embed("de/ms_ite/assets/tab_assets.swf#indicator");	
+		viewNavCloseButtonStyleName: "closeTabButton";
+
+		disabledSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		downSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		overSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		selectedDisabledSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		selectedDownSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		selectedOverSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		selectedUpSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		upSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		backgroundGradientColors: #e0e0e0, #f0f0f0;	
+		backgroundGradientAlphas: 1, 1;
+		
+	}
+
+	.firefoxLikeTabsReverse {
+		highlightAlphas: 0.52, 0.4;
+		fillAlphas: 1, 1, 0.5, 0.3;
+	   	fillColors: #e0e0e0, #c0c0c0, #e0e0e0, #e0e0ff;
+	   	backgroundColor: #f0c0c0;
+	   	borderColor: #999999;
+	   	color: #000000;
+	   	textRollOverColor: #000000;	
+	   	textAlign: "left";
+	   	indicatorClass: Embed("de/ms_ite/assets/tab_assets.swf#indicator");	
+		viewNavCloseButtonStyleName: "closeTabButton";
+
+		disabledSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		downSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		overSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		selectedDisabledSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		selectedDownSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		selectedOverSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		selectedUpSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		upSkin: ClassReference("de.ms_ite.skins.GradientTabSkin");
+		backgroundGradientColors: #c0c0c0, #e0e0e0, #c0c0c0, #e0e0ff;	
+		backgroundGradientAlphas: 1, 1;
+		
+	}	

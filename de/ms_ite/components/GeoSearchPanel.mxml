@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox 
+	xmlns:mx="http://www.adobe.com/2006/mxml"
+	creationComplete="initUI()" 
+	width="100%" height="100%">
+	<mx:RemoteObject id="myservice" fault="faultHandler(event)" showBusyCursor="true" source="GeoMetaServiceGOgrafx" destination="amfphp">
+        <mx:method name="searchMethods" result="resultHandlerMethods(event)" />
+        <mx:method name="geoSearch" result="resultHandler(event)" />
+    </mx:RemoteObject>
+	<mx:Script>
+		<![CDATA[
+            import mx.rpc.events.ResultEvent;
+            import mx.rpc.events.FaultEvent;
+            import mx.utils.ArrayUtil;
+            import mx.managers.CursorManager;
+
+			import mx.controls.*;
+			import mx.events.*;
+        	import mx.collections.*;
+        	import mx.messaging.*;
+        	import mx.messaging.channels.*;
+        	import mx.messaging.config.*;
+
+			protected var services:Object;
+
+			protected var formLabels:Array;
+			protected var formFields:Array;
+
+        	public var _sheet:TableSheet;
+        	protected var _stack:TableSheetStack;
+
+			protected function initUI():void {
+				sheet = null;
+				
+	    		formLabels = new Array();
+	    		formFields = new Array();
+	    		for( var i:int= 0; i < 5; i++) {
+	    			var tfi:FormItem = new FormItem();
+	    			tfi.visible = false;
+	    			formLabels.push( tfi);
+	    			searchForm.addChild( tfi);
+	    			
+	    			var tfv:TextInput = new TextInput();
+	    			formFields.push( tfv);
+	    			tfv.addEventListener( FlexEvent.ENTER, setSearch);
+	    			tfi.addChild( tfv);
+	    		}
+	    		
+	    		myservice.getOperation('searchMethods').send();
+	    		toolTip = 'Retrieving available services.';  		
+			}
+			
+        	public function set sheet( s:TableSheet):void {
+        		debug( "sheet.");
+        		
+        		_sheet = s;
+        		gsSearch.enabled = (_sheet != null);
+        		gsSearch.toolTip = gsSearch.enabled ? 'Search location ot landmark.' : 'Create a sheet first. Click green *.'; 
+        	}
+        	
+        	public function get sheet():TableSheet {
+        		return _sheet;
+        	}
+			
+        	public function set stack( st:TableSheetStack):void {
+        		
+        		if ( _stack == st) return;
+        		
+        		if ( _stack != null) _stack.removeEventListener( Event.CHANGE, handleStackChanged); 
+        		_stack = st;
+        		_stack.addEventListener( Event.CHANGE, handleStackChanged);
+        	}
+
+        	public function get stack():TableSheetStack {
+        		return _stack;
+        	}
+        	
+        	protected function handleStackChanged( evt:Event):void {
+        		sheet = _stack.topSheet;
+        	}
+        	
+		    private function setSearch( evt:Event):void {
+		    	var parms:Array = new Array();
+		    	for( var i:int = 0; i < 5; i++) {
+		    		if ( formLabels[i].visible) parms.push( formFields[i].text);
+		    		else parms.push( '');
+		    	}
+		    	debug( "search: "+myservice+" for "+parms.join( ','));
+		    	myservice.getOperation('geoSearch').send( gs_service.selectedLabel, '', 0, 100, parms[0], parms[1], parms[2], parms[3], parms[4]);
+		    }
+
+            private function faultHandler(fault:FaultEvent):void {
+            	debug( "err: "+fault);
+                CursorManager.removeBusyCursor();
+                debug( "code:\n" + fault.fault.faultCode + "\n\nMessage:\n" + fault.fault.faultString + "\n\nDetail:\n" + fault.fault.faultDetail);
+            }
+
+            private function resultHandler(evt:ResultEvent):void {
+            	debug( "rx: "+evt);
+            	_sheet.dataProvider = new ArrayCollection( ArrayUtil.toArray( evt.result));
+            	_sheet.zoom();
+            }
+           
+            private function resultHandlerMethods(evt:ResultEvent):void {
+            	debug( "rx: "+evt);
+            	services = evt.result;
+            	
+            	var temp:Array = new Array();
+            	for( var serv:String in services) {
+            		debug( "service: "+serv);
+            		temp.push( serv);
+            	}
+            	gs_service.dataProvider = temp;
+            	
+            	setService( gs_service.selectedItem as String);
+            	toolTip = 'Search online.'
+            }
+            
+            protected function adaptService( evt:Event):void {
+            	setService( gs_service.selectedItem as String);
+            }
+            
+            protected function setService( s:String):void {
+            	debug( "set: "+s);
+            	var hasServices:Boolean = false;
+            	for( var serv:String in services) {
+            		if ( s == serv) {
+            			for( var i:int; i < 5; i++) {
+            				if ( i < services[ serv].length) {
+	            				formLabels[i].label = services[ serv][ i];	
+	            				debug( "field: "+services[ serv][ i]);
+            				}
+            				
+							formLabels[i].visible = ( i < services[ serv].length);
+            			}
+            		}
+            		hasServices = true;
+            	}
+            	if ( hasServices) {
+            		gs_service.enabled = true;
+//            		gsSearch.enabled = true;
+            	}            	
+            }
+            protected function debug( txt:String):void {
+            	trace( "DBG GSP: "+txt);
+            }
+		]]>
+	</mx:Script>
+    <mx:Form width="100%" paddingTop="4" paddingBottom="4" paddingLeft="4" paddingRight="4" id="searchForm">
+        <mx:FormItem label="Service" fontWeight="bold" width="250">
+            <mx:ComboBox id="gs_service" change="adaptService( event);" enabled="false" toolTip="Select service to request."></mx:ComboBox>
+        </mx:FormItem>
+    </mx:Form>
+    <mx:VBox height="100%" verticalAlign="bottom" verticalGap="2" paddingBottom="4" paddingLeft="4" paddingRight="4" paddingTop="4">
+        <mx:Button label="Search" width="79" click="setSearch( event);" toolTip="Trigger search for selected service." enabled="false" id="gsSearch"/>
+    </mx:VBox>
+</mx:HBox>

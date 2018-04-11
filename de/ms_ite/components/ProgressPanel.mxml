@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Panel title="Please wait ..." xmlns:mx="http://www.adobe.com/2006/mxml"
+	layout="vertical" 
+	minHeight="50" 
+	minWidth="150" width="200" paddingBottom="2" paddingLeft="2" paddingRight="2" paddingTop="2" alpha="0.8">
+	<mx:Script>
+		<![CDATA[
+			
+			protected var _src:Object;
+			
+			public function set source( src:Object):void {
+				_src = src;
+				if ( pbProgress != null) pbProgress.source = _src;
+			}
+			
+			public function get source():Object {
+				return pbProgress.source;
+			}
+			
+			public function reset():void {
+				if ( pbProgress != null) pbProgress.setProgress( 0, 1);
+			}
+			
+			protected function attachPBar( evt:Event):void {
+				if ( _src != null) pbProgress.source = _src;
+			}
+		]]>
+	</mx:Script>
+	<mx:VBox verticalGap="4" width="100%">
+		<mx:ProgressBar width="100%" id="pbProgress" creationComplete="attachPBar( event)"/>
+	</mx:VBox>
+</mx:Panel>

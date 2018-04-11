@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" horizontalGap="5">
+<mx:RemoteObject id="geocoder" fault="faultHandler(event)" showBusyCursor="true" source="GeoMetaServiceGOgrafx" destination="amfphp">
+    <mx:method name="mapSurface" result="handleZipCodeResult(event)" />
+</mx:RemoteObject>
+
+<mx:Script>
+        <![CDATA[
+        	import de.ms_ite.components.TableSheet;
+        	import de.ms_ite.maptech.symbols.*;
+        	import de.ms_ite.tools.*;
+
+        	import mx.core.*;
+            import mx.events.*;
+            import mx.containers.*;
+        	import mx.controls.*;
+        	import mx.controls.dataGridClasses.*;
+			import mx.managers.*;
+        	import mx.collections.*;
+            import mx.rpc.events.ResultEvent;
+            import mx.rpc.events.FaultEvent;
+            import mx.utils.ArrayUtil;
+        	
+        	public var _columns:Array;
+        	public var _cols_out:Array;
+        	
+        	public var _sheet:TableSheet;
+        	
+        	protected var rowIndex:int = -1;
+        	public var result:Array;
+        	
+        	protected var isCoding:Boolean = false;
+			protected var searchReq:Array;        	
+        	protected var _cache:IServiceCache = null;
+        	
+        	protected var service:String = 'plz';
+        	        	
+        	public function set sheet( s:TableSheet):void {
+        		debug( "sheet.");
+        		if ( isCoding) return;
+        		
+        		_sheet = s;
+        		if ( _sheet.table.columns.length > 0) {
+        			columns = _sheet.table.columns;
+        			
+        			progress.maximum = _sheet.dataProvider.length;
+            		progress.setProgress( rowIndex, _sheet.dataProvider.length);
+        			
+        			outPane.enabled = inPane.enabled = true;
+        			result = new Array();
+        		} else {
+            		progress.setProgress( 0, 100);
+        			outPane.enabled = inPane.enabled = false;
+        		}
+        	}
+        	
+        	public function get sheet():TableSheet {
+        		return _sheet;
+        	}
+        	
+        	public function set columns( c:Array):void {
+        		if ( isCoding) return;
+
+        		_columns = new Array();
+        		_columns.push( '-- off --');
+        		
+        		_cols_out = new Array();
+        		_cols_out.push( 'New: geometry');
+        		_cols_out.push( 'New: location & geometry');
+        		
+        		for( var i:int=0; i < c.length; i++) {
+        			var temp:String = DataGridColumn( c[ i]).headerText;
+        			_columns.push( temp);
+        			_cols_out.push( temp);
+        		}
+        		
+        		selCountry.dataProvider=_columns;
+        		selZIP.dataProvider=_columns;
+        		        		
+        		selOutput.dataProvider=_cols_out;
+			}
+        	
+        	public function get columns():Array {
+        		var temp:Array = new Array;
+        		
+        		if ( selCountry.selectedItem != '-- off --') temp.push( selCountry.selectedItem);
+        		if ( selZIP.selectedItem != '-- off --') temp.push( selZIP.selectedItem);
+
+        		return temp;
+        	}
+        	
+        	public function get output():String {
+        		return selOutput.selectedItem as String;
+        	}
+        	
+        	public function set cache( c:IServiceCache):void {
+        		if ( _cache != null) {
+        			_cache.removeEventListener( Event.COMPLETE, cacheArrived);
+        			_cache.removeEventListener( Event.ADDED, cacheUpdated);
+        		}
+        		_cache = c;
+        		if ( _cache != null) {
+        			_cache.addEventListener( Event.COMPLETE, cacheArrived);
+        			_cache.addEventListener( Event.ADDED, cacheUpdated);
+        		}
+        	}
+        	
+        	protected function go(evt:Event):void {
+				debug( "geoCode.");
+				
+				rowIndex = 0;
+				progress.setProgress( rowIndex, _sheet.dataProvider.length);
+				triggerGeoCodeRow();
+			}
+			
+			protected function mapDataTag( col_head:String):String {
+				var dgc:Array = _sheet.table.columns;
+				for( var i:int=0; i < dgc.length; i++) {
+					var col:DataGridColumn = DataGridColumn( dgc[i]);
+					if ( col.headerText == col_head) return col.dataField;
+				}
+				
+				return '?';
+			} 
+			
+			protected function triggerGeoCodeRow():void {
+				
+				isCoding = true;
+				
+        		var rqCountry:String = ( selCountry.selectedItem != '-- off --') ? _sheet.table.dataProvider[ rowIndex][ mapDataTag( String( selCountry.selectedItem))] : '';
+        		var rqZIP:String = ( selZIP.selectedItem != '-- off --') ? ''+_sheet.table.dataProvider[ rowIndex][ mapDataTag( String( selZIP.selectedItem))] : '';
+
+//				geocoder.getOperation('geoSearch').send( 'google', '', 0, 100, unified, '', '', '', '');
+				searchReq = [ rqCountry, rqZIP];
+
+				debug( "geoCode: '"+searchReq+"'");
+
+				if ( _cache != null) _cache.getCached( 'geoSearch:surface:'+service, searchReq);
+				else doGeocode( searchReq);
+			}
+			
+			protected function cacheArrived( evt:Event):void {
+				var res:Array = _cache.getResult();
+				debug( "cached: "+(( res != null) ? 'yes' : 'no'));
+				if ( res != null) handleResult( res);
+				else doGeocode( searchReq);
+			}
+			
+			protected function doGeocode( srq:Array):void {
+				debug( "calling service: "+srq[0]+"/"+srq[1]);
+				geocoder.getOperation('mapSurface').send( service, '', 0, 100, srq[0], srq[1]);
+			}
+			
+            private function handleZipCodeResult(evt:ResultEvent):void {
+            	debug( "rx: "+evt.result.toString());
+            	
+            	if ( _cache != null && ((evt.result != null) ? (evt.result.length > 0) : false)) {
+            		_cache.insertCall( 'geoSearch:surface:'+service, searchReq, evt.result);
+            	} else handleResult( evt.result as Array);
+            }
+            	
+			protected function cacheUpdated( evt:Event):void {
+//				debug( "cache updated");
+				handleResult( _cache.getResult());
+			}
+			
+            protected function handleResult( res:Array):void {
+            	var obj:Object = _sheet.table.dataProvider[ rowIndex];
+            	var row:Object;
+
+            	switch( selOutput.selectedItem) {
+            		case 'New: geometry':
+            		case 'New: location & geometry':
+						var myBA:ByteArray = new ByteArray();
+		
+					    myBA.writeObject(obj);
+					    myBA.position = 0;
+		
+						row = myBA.readObject();
+            		break;
+            		default: row = obj;
+            	}
+            	var gc:Object = null;
+				if (( res != null) ? (res.length > 0) : false) {
+					gc = res[ 0];
+            		debug( "coded: "+gc.ziplist+" @ "+gc.zentroid /*+","+gc.geometry*/);
+				} 
+				if ( gc == null) {
+					debug( "  !coded.");
+					gc = new Object();
+					gc.lat = 0;
+					gc.lng = 0;
+				}
+					
+            	switch( selOutput.selectedItem) {
+
+            		case 'New: location & geometry':
+        				row.location = gc.zentroid;
+            		case 'New: geometry':
+        				row.geometry = gc.geometry;
+            		break;
+            		
+            		default:
+            			debug( "pre: "+row[ selOutput.selectedItem]);
+            			row[ selOutput.selectedItem] = gc.geometry;
+            			debug( "post: "+row[ selOutput.selectedItem]);
+            	}
+	            	            	
+            	result.push( row);
+            	
+            	rowIndex++;
+//            	debug( "progress: "+rowIndex+" / "+_sheet.dataProvider.length);
+            	progress.setProgress( rowIndex, _sheet.dataProvider.length);
+            	
+            	if ( rowIndex >= _sheet.table.dataProvider.length) {
+            		debug( "complete");
+            		rowIndex = -1;
+					isCoding = false;
+					
+            		dispatchEvent( new Event( Event.COMPLETE));
+            		
+            		return;
+            	}
+            	
+            	triggerGeoCodeRow();
+            }			
+
+            private function faultHandler(fault:FaultEvent):void {
+            	debug( "err: "+fault);
+                CursorManager.removeBusyCursor();
+                debug( "code:\n" + fault.fault.faultCode + "\n\nMessage:\n" + fault.fault.faultString + "\n\nDetail:\n" + fault.fault.faultDetail);
+            }
+            
+            protected function handleChangeService( evt:Event):void {
+            	service = cService.selectedItem as String;
+            }
+
+			protected function debug( txt:String):void {
+				trace( "DBG GRP: "+txt);
+			}
+        ]]>
+    </mx:Script>
+		<mx:VBox width="50%" height="100%" id="inPane">
+			<mx:Form width="100%" height="100%" paddingBottom="5" paddingLeft="5" paddingRight="5" paddingTop="5">
+				<mx:FormItem label="Code:">
+					<mx:ComboBox id="cService" dataProvider="['ZIP','ISO-Country']" change="handleChangeService( event);"></mx:ComboBox>
+				</mx:FormItem>
+				<mx:FormItem label="Select columns:" width="160">
+				</mx:FormItem>
+				<mx:FormItem label="Country-Code">
+					<mx:ComboBox id="selCountry" toolTip="Select column to hold country-code."></mx:ComboBox>
+				</mx:FormItem>
+				<mx:FormItem label="ZIP" toolTip="Select column to hold ZIP code.">
+					<mx:ComboBox id="selZIP"></mx:ComboBox>
+				</mx:FormItem>
+			</mx:Form>
+		</mx:VBox>
+		<mx:VBox width="50%" height="100%" verticalAlign="top" horizontalAlign="center" id="outPane">
+			<mx:Form width="100%" height="100%" paddingBottom="5" paddingLeft="5" paddingRight="5" paddingTop="5">
+				<mx:FormItem label="Output to Column:" horizontalAlign="left">
+					<mx:Spacer/>
+				</mx:FormItem>
+				<mx:ComboBox id="selOutput" toolTip="Select output column and type."></mx:ComboBox>
+				<mx:FormItem height="20">
+					<mx:Spacer/>
+				</mx:FormItem>
+				<mx:Button label="Start Coding" id="bGeoCode"  click="go( event);" toolTip="Start gecoding sheet."/>
+				<mx:FormItem label="Progress:" horizontalAlign="left">
+					<mx:Spacer/>
+				</mx:FormItem>
+				<mx:ProgressBar id="progress" mode="manual"/>
+			</mx:Form>
+		</mx:VBox>
+</mx:HBox>

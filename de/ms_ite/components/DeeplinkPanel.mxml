@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox 
+	xmlns:mx="http://www.adobe.com/2006/mxml"
+	creationComplete="initUI();"
+	verticalGap="2"
+	xmlns:text="flash.text.*" width="100%" paddingBottom="2" paddingLeft="2" paddingRight="2" paddingTop="2">
+	<mx:Script>
+		<![CDATA[
+			import mx.effects.easing.Back;
+			import mx.messaging.AbstractConsumer;
+			import mx.controls.Menu;
+			import mx.events.*;
+		
+			protected var selCat:XML;
+			protected var selListe:Array;
+
+			protected var linkPre:String;			
+			protected var linkPost:String;			
+
+			[Bindable]
+			public var app:Object;
+			
+			public function initUI():void {
+				changeTemplate( null);
+			}
+			
+			public function setCat( node:XML):void {
+				
+				selCat = node;
+//				setCatLink();
+				setView();
+			}
+/*			
+			protected function setCatLink():void {		
+				if ( selCat == null) return;
+						
+				linkCat.text = linkPre+'CATS='+selCat.@matchid+linkPost;
+				linkPOI.text = '';
+				
+				cnpPOI.enabled = false;
+				linkPOI.enabled = false;
+			}
+			
+			public function setPOI( sel:Array):void {
+				
+				selListe = sel;
+				setListLink();
+			}
+			
+			protected function setListLink():void {
+				
+				if ( selListe != null) linkPOI.text = linkPre+'IDS='+selListe.join( ',')+linkPost;
+
+				var en:Boolean = ( selListe != null) ? ( selListe.length > 0) : false;
+				
+				cnpPOI.enabled = en;
+				linkPOI.enabled = en;
+			}
+*/			
+			public function setView():void {
+				
+				var link:String = linkPre;
+
+				link += app.getCoord();
+				if ( selCat != null) link += '&CATS='+selCat.@matchid;
+				
+				link += linkPost;
+				
+				linkView.text = link;
+			}
+			
+			protected function copyNpaste( ta:TextArea):void {
+				System.setClipboard( ta.text);
+			}
+			
+			protected function changeTemplate( evt:Event):void {
+				debug( "changeMode: "+mdLive.selected);
+				
+				if ( mdLive.selected) {
+					linkPre = ( app.settings == null) ? 'http://umgebungsplan.sueddeutsche.de/#' : app.settings.urls.live.pre;
+					linkPost = ( app.settings == null) ? '' : app.settings.urls.live.post;
+				} else {
+					linkPre = ( app.settings == null) ? 'http://umgebungsplan-test.sueddeutsche.de/#' : app.settings.urls.test.pre;
+					linkPost = ( app.settings == null) ? '' : app.settings.urls.test.post;					
+				}
+//				setCatLink();
+//				setListLink();
+				setView();
+			}
+			
+ 			protected function debug( txt:String):void {
+ 				trace( "DBG: "+txt);
+ 			}
+		]]>
+	</mx:Script>
+	<mx:HBox width="100%">
+		<mx:RadioButtonGroup id="linkMode" itemClick="changeTemplate(event);" selection="{mdLive}"/>
+		<mx:RadioButton label="Live" groupName="linkMode" selected="true" id="mdLive"/>
+		<mx:RadioButton label="Test" groupName="linkMode" id="mdTest"/>
+	</mx:HBox>
+	<mx:Label text="View:"/>
+	<mx:TextArea width="100%" height="60" id="linkView"/>
+	<mx:Button label="Copy to Clipboard" id="cnpView" click="copyNpaste( linkView);"/>
+	<!-- mx:Label text="POI:"/>
+	<mx:TextArea width="100%" height="100%" id="linkPOI"/>
+	<mx:Button label="Copy to Clipboard" id="cnpPOI" click="copyNpaste( linkPOI);"/ -->
+</mx:VBox>

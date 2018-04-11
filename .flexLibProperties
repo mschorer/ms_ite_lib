@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<flexLibProperties includeAllClasses="false" useMultiPlatformConfig="false" version="1">
+  <includeClasses>
+    <classEntry path="de.ms_ite.Dimension"/>
+    <classEntry path="de.ms_ite.components.CategoryEditor"/>
+    <classEntry path="de.ms_ite.components.CategoryTreeItemrenderer"/>
+    <classEntry path="de.ms_ite.components.DatabindingPanel"/>
+    <classEntry path="de.ms_ite.components.DeeplinkPanel"/>
+    <classEntry path="de.ms_ite.components.FeedURLInput"/>
+    <classEntry path="de.ms_ite.components.FlashIconRenderer"/>
+    <classEntry path="de.ms_ite.components.GeoCodePanel"/>
+    <classEntry path="de.ms_ite.components.GeoFeedReader"/>
+    <classEntry path="de.ms_ite.components.GeoSearchPanel"/>
+    <classEntry path="de.ms_ite.components.GeofeederAboutPanel"/>
+    <classEntry path="de.ms_ite.components.GeometryStyleEditor"/>
+    <classEntry path="de.ms_ite.components.GeorefPanel"/>
+    <classEntry path="de.ms_ite.components.ImageIconRenderer"/>
+    <classEntry path="de.ms_ite.components.ListDeferred"/>
+    <classEntry path="de.ms_ite.components.LoadingBlurPanel"/>
+    <classEntry path="de.ms_ite.components.MeasureCamCanvas"/>
+    <classEntry path="de.ms_ite.components.POIEditor"/>
+    <classEntry path="de.ms_ite.components.PanoramioPanel"/>
+    <classEntry path="de.ms_ite.components.ProgressPanel"/>
+    <classEntry path="de.ms_ite.components.RenamePanel"/>
+    <classEntry path="de.ms_ite.components.StyleEditor"/>
+    <classEntry path="de.ms_ite.components.SurfaceCodePanel"/>
+    <classEntry path="de.ms_ite.components.SymbolGrid"/>
+    <classEntry path="de.ms_ite.components.TableSheet"/>
+    <classEntry path="de.ms_ite.components.TableSheetStack"/>
+    <classEntry path="de.ms_ite.components.ViewBar"/>
+    <classEntry path="de.ms_ite.components.ViewNavigator"/>
+    <classEntry path="de.ms_ite.components.ViewTab"/>
+    <classEntry path="de.ms_ite.components.WaitBlurPanel"/>
+    <classEntry path="de.ms_ite.components.Watermark"/>
+    <classEntry path="de.ms_ite.events.LoginEvent"/>
+    <classEntry path="de.ms_ite.events.TableSheetEvent"/>
+    <classEntry path="de.ms_ite.events.ViewNavEvent"/>
+    <classEntry path="de.ms_ite.skins.GradientTabSkin"/>
+    <classEntry path="de.ms_ite.skins.TabPopUpButtonSkin"/>
+    <classEntry path="de.ms_ite.tools.DebugChannel"/>
+    <classEntry path="de.ms_ite.tools.DebugConnection"/>
+    <classEntry path="de.ms_ite.tools.FormatCSV"/>
+    <classEntry path="de.ms_ite.tools.SymbolDataHelper"/>
+    <classEntry path="de.ms_ite.zf.ZfEvent"/>
+    <classEntry path="de.ms_ite.zf.ZfGis"/>
+    <classEntry path="de.ms_ite.zf.ZfImage"/>
+    <classEntry path="de.ms_ite.zf.ZfLoader"/>
+    <classEntry path="de.ms_ite.zf.ZfTile"/>
+    <classEntry path="de.ms_ite.zf.ZfTileWatermarked"/>
+    <classEntry path="de.ms_ite.components.FormattedStepper"/>
+    <classEntry path="de.ms_ite.skins.CloseButtonSkin"/>
+    <classEntry path="de.ms_ite.skins.RssButtonSkin"/>
+  </includeClasses>
+  <includeResources>
+    <resourceEntry destPath="de/ms_ite/assets/document.png" sourcePath="de/ms_ite/assets/document.png"/>
+    <resourceEntry destPath="de/ms_ite/styles/ViewNavigatorStyles.css" sourcePath="de/ms_ite/styles/ViewNavigatorStyles.css"/>
+    <resourceEntry destPath="de/ms_ite/assets/menu_assets.swf" sourcePath="de/ms_ite/assets/menu_assets.swf"/>
+    <resourceEntry destPath="de/ms_ite/assets/sym_preview_back.png" sourcePath="de/ms_ite/assets/sym_preview_back.png"/>
+    <resourceEntry destPath="de/ms_ite/components/panoramio.png" sourcePath="de/ms_ite/components/panoramio.png"/>
+    <resourceEntry destPath="de/ms_ite/assets/tab_assets.swf" sourcePath="de/ms_ite/assets/tab_assets.swf"/>
+    <resourceEntry destPath="de/ms_ite/styles/SomeStyles.css" sourcePath="de/ms_ite/styles/SomeStyles.css"/>
+  </includeResources>
+  <namespaceManifests/>
+</flexLibProperties>

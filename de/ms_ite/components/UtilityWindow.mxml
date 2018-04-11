@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Window xmlns:mx="http://www.adobe.com/2006/mxml" 
+	backgroundColor="#FFFFFF" 
+	width="400" 
+	height="400" 
+	layout="absolute" 
+	creationComplete="initUI();">
+    <mx:Script>
+        <![CDATA[
+        
+        import mx.managers.*;
+        
+        protected function initUI():void {
+        }
+        
+        ]]>
+    </mx:Script>
+</mx:Window>

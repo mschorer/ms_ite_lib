@@ -1,0 +1,543 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml"
+	width="100%"
+	height="100%"
+	creationComplete="buildUI();"
+	>
+	<mx:Script>
+		<![CDATA[
+			import mx.controls.*;
+			import mx.containers.*;
+			import flash.display.*;
+			import flash.xml.*;
+			import flash.net.*;
+			import flash.utils.*;
+			import flash.events.*;
+			import flash.media.*;
+
+        	import mx.collections.*;
+			import mx.managers.*;
+			
+			protected var vclip:Video;
+			protected var vclip2:Video;
+			protected var cam:Camera;
+			protected var calc:Canvas;
+			
+			protected var camName:String;
+			protected var fps:int;
+			
+			private var stills:Array;
+			private var deltas:Array;
+			private var saveIndex:int;
+			private var idle:int;
+			
+			private var forceUpdate:Boolean = false;
+			
+			private var motionHist:Array;
+			private var motionIdx:int = 0;
+			private var motionAvg:int;
+			private var motionSum:int = 0;
+			
+			protected var avgHist:Array;
+			protected var avgTemp:BitmapData;
+			protected var avgImage:BitmapData;
+			protected var avgClip:BitmapData;
+			
+			public var VERSION:String = '0.65';
+			
+			private static var r_lum:Number = 0.212671;
+			private static var g_lum:Number = 0.715160;
+			private static var b_lum:Number = 0.072169;
+
+			protected static var desat:Array = new Array (	r_lum, g_lum, b_lum, 0, 0,
+					  			 						r_lum, g_lum, b_lum, 0, 0,
+					   			 						r_lum, g_lum, b_lum, 0, 0,
+					    		 						0    , 0    , 0    , 1, 0 );
+					    		 						
+			protected var fDesaturate:ColorMatrixFilter;
+			protected var fDenoise:BlurFilter;
+			protected var fConvolution:ConvolutionFilter;
+			
+			protected var ACTIVITYTRIGGER:Number = 0.3;
+			protected var MOTIONTRIGGER:Number = 0.45;
+			protected var VARIANZTRIGGER:Number = 7;
+			
+			protected var heightMax:Number = 0;
+			
+			protected var filmStripLength:int;
+			
+			protected var replayImage:Bitmap;
+			protected var ovlCanvas:Canvas;
+			
+			protected var avgTrig:int = -1;
+			protected var displayAverage:Boolean = true;
+
+		    protected function setAvgDisplay( mode:Boolean):void {
+		    	if ( mode == displayAverage) return;
+		    	
+		    	if ( avgTrig >= 0) {
+		    		clearTimeout( avgTrig);
+		    		avgTrig = -1;
+		    	}
+		    	if ( mode) {
+		    		displayAverage = true;
+					ovlCanvas.graphics.clear();
+		    	} else {
+		    		displayAverage = false;
+		    		avgTrig = setTimeout( setAvgDisplay, 4000, true);
+		    	}
+		    	
+		    }
+
+			public function buildUI():void {
+
+				var camName:String = null;
+				var camList:Array = Camera.names;
+				var camFound:Boolean = false;
+				var sp:Sprite;
+				
+				if (( camList != null) ? (camList.length == 0) : true) {
+					Alert.show( "No camera's found!", "No Camera available!", Alert.OK);
+					return;	
+				}
+
+				sp = new Sprite();
+				for( var j:int = 0; j < camList.length; j++) {
+					trace( "  usable Cams("+(camList[ j] == camName)+"): "+camList[j]);
+					if ( camName != null && camList[ j] == camName) camFound = true; 
+					if ( camName == null) camName = camList[j];
+				}
+				if ( ! camFound) {
+					trace( "  Camera "+camName+" not found.");
+					camName = null;
+				}
+				else trace( "  found Camera: "+camName);
+				
+				cam = Camera.getCamera( camName);
+				
+				trace( "  use Cam: "+cam);
+	
+				vclip = new Video();
+				vclip.smoothing = true;
+				vclip.attachCamera( cam);
+
+	//			vclip.visible = false;
+				live.rawChildren.addChild( vclip);
+	
+				calc = new Canvas();
+				calc.width=80;
+				calc.height=60;
+				
+				vclip2 = new Video();
+				vclip2.smoothing = false;
+				vclip2.attachCamera( cam);
+				vclip2.width = 320;
+				vclip2.height = 240;
+//				vclip2.filters = [ new ColorMatrixFilter( desat)];
+				
+				calc.rawChildren.addChild( vclip2);
+				
+				trace( "  v2 scale: "+vclip2.scaleX+","+vclip2.scaleY);
+								
+				trace( "  attached Cam: "+cam);
+										
+				cam.setMode( 320, 240, 25, true);
+				cam.addEventListener( ActivityEvent.ACTIVITY, handleActivity);
+//				cam.setMotionLevel(10,10);
+				
+				SoundMixer.soundTransform.volume = 0;
+
+				vclip.width = cam.width;
+				vclip.height = cam.height;
+				live.width = vclip.width;
+				live.height = vclip.height;
+
+				trace( "vSize: "+vclip.width+","+vclip.height);				
+				trace( "Cam.parms: "+cam.width+"x"+cam.height+" @ "+cam.fps+"fps");
+				trace( "Camera: "+width+"/"+height);
+				
+				stills = new Array();
+				deltas = new Array();
+				for( var i:int = 0; i < 25; i++) {
+					
+					var temp:Bitmap = new Bitmap( new BitmapData( vclip.width, vclip.height));
+//					temp.bitmapData = ;
+					filmStrip.rawChildren.addChild( temp);
+					temp.x = 80 * i;
+					temp.width = 320;
+					temp.height = 240;
+					temp.scaleX = 0.25;
+					temp.scaleY = 0.25;
+					stills.push( temp);
+
+					var dtemp:Bitmap = new Bitmap( new BitmapData( 80, 60));
+//					dtemp.bitmapData = sequence[0];
+					filmStrip.rawChildren.addChild( dtemp);
+					dtemp.x = 80 * i;
+					dtemp.y = 60;
+					dtemp.width = 80;
+					dtemp.height = 60;
+					deltas.push( dtemp);					
+				}
+				filmStrip.width = 80 * i;
+				saveIndex = -1;
+				
+				slTrigger.value = ACTIVITYTRIGGER;
+				slMotion.value = MOTIONTRIGGER;
+				slVarianz.value = VARIANZTRIGGER;
+				
+				idle = postRun.value;
+				
+				replayImage = new Bitmap( new BitmapData( vclip.width, vclip.height, false));
+				replay.rawChildren.addChild( replayImage);
+				
+				ovlCanvas = new Canvas();
+				replay.addChild( ovlCanvas);
+				ovlCanvas.width = replay.width;
+				ovlCanvas.height = replay.height;
+				
+				fDesaturate = new ColorMatrixFilter( desat);
+				fDenoise = new BlurFilter( 2, 2, 1);
+/*				
+				var matrix:Array;
+				
+				switch( 0) {
+					case 0: matrix = [0, -1, 0,
+									-1, 20, -1,
+									0, -1, 0];
+					break;
+		                                
+		            case 1: matrix= [-30, 30, 0,
+									-30, 30, 0,
+									-30, 30, 0];
+					break;
+				}
+	            var matrixX:Number = 3;
+	            var matrixY:Number = 3;
+	            var divisor:Number = 9;
+	            fConvolution = new ConvolutionFilter(matrixX, matrixY, matrix, divisor);
+*/
+				motionHist = new Array();
+				avgHist = new Array();
+				avgImage = new BitmapData( vclip.width, vclip.height);
+				avgClip = new BitmapData( 80, 60);
+				
+	//			vclip.addEventListener( ProgressEvent.PROGRESS, onVStatus);
+		//		error( "created: "+this);
+				setInterval( saveImage, 40, null);
+			}
+			
+			private function handleActivity( evt:ActivityEvent):void {
+//				trace( "t: "+cam.activityLevel);
+			}
+			
+			private function saveImage( Evt:Event):void {
+//				trace( "save "+idx);
+
+				var tAct:int = cam.activityLevel;				
+				var delta:int = ( 100 - motionAvg) * ACTIVITYTRIGGER;
+				
+//				trace( "motion: "+tAct+" / "+motionAvg+" / "+delta);
+				
+				if ( tAct < motionAvg + delta) {
+					if ( idle < 0) {
+						motionHist.push( tAct);
+						motionSum += tAct;
+						if ( motionHist.length > 5) motionSum -= motionHist.shift();
+						motionAvg = motionSum / motionHist.length;
+//						trace( "motion: "+motionAvg);
+
+						avgTemp = new BitmapData( vclip.width, vclip.height, false);
+						avgTemp.draw( vclip);
+						avgHist.push( avgTemp);
+						var scale:int = 256 / avgHist.length;
+						avgImage.merge( avgTemp, new Rectangle( 0, 0, 320, 240), new Point( 0, 0), scale, scale, scale, 256);
+//						trace( "scale: "+scale+" / "+avgHist.length);
+						
+						if ( avgHist.length > 5) {
+							avgTemp = new BitmapData(  vclip.width, vclip.height, false, 0x00000000);
+							avgTemp.draw( avgHist.shift(), new Matrix(), null, 'difference');
+							avgImage.merge( avgTemp, new Rectangle( 0, 0, 320, 240), new Point( 0, 0), scale, scale, scale, 256);
+						}
+						
+						avgClip.draw( avgImage, new Matrix( 0.25, 0, 0, 0.25));
+						if ( displayAverage) replayImage.bitmapData = avgImage;
+
+						if ( saveIndex > 0) {
+							trace( "stop");
+							heightMax = -1;
+
+							saveIndex = Math.max( 0, saveIndex - postRun.value);
+							filmStripLength = saveIndex;
+							ovlCanvas.graphics.clear();
+							for( var i:int = 0; i < Math.min( deltas.length, saveIndex); i++) {
+								deltas[ i].bitmapData = motionEstimate( deltas[ i].bitmapData, stills[ i].bitmapData, i);
+							}
+							for( ; i < deltas.length; i++) {
+								deltas[ i].visible = false;
+								stills[ i].visible = false;
+							}
+						}
+						
+						saveIndex = -1;
+						idle = -1;
+						
+						return;
+					} else {
+						idle--;
+//						trace( "continue");
+					}
+				} else {
+					if ( idle < 0) trace( "start");
+					idle = postRun.value;
+//					if ( idle > 0) trace( "run");
+				}
+				
+				if ( saveIndex < 0) saveIndex = 0;
+								
+//				trace( "save: "+saveIndex+" / "+vclip.width+"x"+vclip.height);
+				if ( saveIndex < 25) {
+					var sht:BitmapData = new BitmapData( vclip.width, vclip.height, false);
+					sht.draw( vclip);
+					stills[ saveIndex].bitmapData = sht;
+//					trace( "store");
+				}
+				
+				if (( 0 <= saveIndex) && ( saveIndex < 25)) {
+//					trace( "delta: "+saveIndex);
+//					deltas[saveIndex-1].bitmapData = getDelta( shots[saveIndex -1], shots[saveIndex]);
+					var tempVid:BitmapData = new BitmapData( vclip.width, vclip.height, false);
+					tempVid.draw( calc);
+					var temp:BitmapData = new BitmapData( 80, 60, false);
+					var downscale:Matrix = new Matrix();
+					downscale.scale( 0.25, 0.25);
+					temp.draw( tempVid, downscale);
+				
+					deltas[ saveIndex].bitmapData = getDelta( avgClip, temp);
+					
+					deltas[ saveIndex].visible = true;
+					stills[ saveIndex].visible = true;
+				}
+				
+				saveIndex++;
+				
+				return;
+			}
+			
+			protected function getDelta( from:BitmapData, tod:BitmapData):BitmapData {
+				
+				var temp:BitmapData = new BitmapData( from.width, from.height, false);
+				temp.draw( from);
+				temp.draw( tod, new Matrix(), null, 'difference');
+				temp.applyFilter( temp, new Rectangle( 0, 0, 80, 60), new Point( 0, 0), fDesaturate);
+				
+				return temp;
+			}
+			
+			protected function motionEstimate( data:BitmapData, vis:BitmapData, index:int):BitmapData {
+				var strip:ByteArray;
+				var k:int;
+				var i:int;
+				var w:int = data.width;
+				var h:int = data.height;
+				
+				var estSquare:int = 1;
+				var rasterX:int = w / estSquare;
+				var rasterY:int = h / estSquare;
+
+				var min:Number = 255;
+				var max:Number = 0;
+				var tavg:Number = 0;
+				var count:int = 0;
+				var temp:int;
+				
+				var rAll:Rectangle = new Rectangle( 0, 0, data.width, data.height);
+				var pOrig:Point = new Point( 0, 0);
+				
+				if ( cbSmooth.selected) data.applyFilter( data, rAll, pOrig, fDenoise);
+
+				var delta:Array = new Array();
+				for( k = 0; k < 80; k++) {
+					delta[k ] = new Array();
+				}
+				
+//				var stamp:int = getTimer();
+
+				for( k = 0; k < rasterX; k++) {
+					delta[k ] = new Array();
+					for( i =0; i < rasterY; i++) {
+						var avg:Number =  data.getPixel( k, i) & 255;
+						
+						if ( avg < min) min = avg;
+						if ( avg > max) max = avg;
+						delta[ k][i] = avg;
+						tavg += avg;
+						count++;
+					}
+				}
+				tavg /= count;
+//				trace( "avg: "+tavg+" : "+min+" / "+max);
+
+				var left:int, right:int, bottom:int, top:int;
+				var dTrig:Number = Math.max( 2, (max - tavg) * MOTIONTRIGGER);
+				var trigger:Number = tavg + dTrig;
+				
+				var thres:uint = trigger;
+				//trace( "thres: "+thres);
+				
+				var dest:BitmapData = data;	//new BitmapData( data.width, data.height, false);
+/*				
+				var tstamp:Number = getTimer();
+				trace( "avg      : "+(tstamp-stamp));
+				stamp = tstamp;				
+*/				
+				var pix:uint = dest.threshold( data, rAll, pOrig, '>', thres, 0xff00ffff, 0x000000ff, true);
+//				data.applyFilter( data, new Rectangle( 0, 0, 80, 60), new Point( 0, 0), fConvolution);
+/*
+				tstamp = getTimer();
+				trace( "threshold: "+(tstamp-stamp));
+				stamp = tstamp;
+*/				
+				var centerx:Number = 0;
+				var centery:Number = 0;
+				var active:Number = 0;
+
+				for( k = 0; k < rasterX; k++) {
+					for( i =0; i < rasterY; i++) {
+						temp = delta[k][i];
+						if ( temp < trigger) continue;
+				
+						centerx += k;
+						centery += i;	
+						active++;	//+= weight;
+					}
+				}
+				
+				centerx /= active;
+				centery /= active;
+/*
+				tstamp = getTimer();
+				trace( "avgcenter: "+(tstamp-stamp));
+				stamp = tstamp;
+*/
+				var varianz:Number = 0;
+				for( k = 0; k < rasterX; k++) {
+					for( i =0; i < rasterY; i++) {
+						if ( delta[k][i] < trigger) continue;
+
+						varianz += Math.sqrt( Math.pow( centerx - k, 2) + Math.pow( centery - i, 2));
+					}
+				}
+				varianz /= active;
+
+				if ( varianz < VARIANZTRIGGER) {
+					var r:Rectangle = new Rectangle( centerx*estSquare, centery*estSquare, 2+varianz, 2+varianz);
+//					vis.fillRect( r, 0x00ff00);
+					dest.fillRect( r, 0x00ff00);
+
+					ovlCanvas.graphics.lineStyle( 2, 0xff00ff00);
+					ovlCanvas.graphics.drawCircle( centerx*estSquare*4, centery*estSquare*4, 4*varianz);
+						
+					var pixHeight:Number = dest.height - centery*estSquare;
+					trace( "height: "+pixHeight+" / "+heightMax);
+					
+					if ( pixHeight > heightMax || heightMax < 0) {
+						trace( "set max: "+pixHeight);
+						tiHeight.text = ''+( Math.round( pixHeight / (60 / heightScale.value) * 10) / 10 - heightOffset.value)+'m';
+						heightMax = pixHeight;
+						dest.fillRect( r, 0xffff00);
+
+//						vis.fillRect( r, 0xff0000);
+						
+						stripContainer.horizontalScrollPosition = Math.max( 0, index * 80 + 40 - width/2);
+/*						
+						var r:Rectangle = new Rectangle( centerx*estSquare*4, centery*estSquare*4, 4+varianz, 4+varianz);
+						stills[ index].bitmapData.fillRect( r, 0xffff00);
+*/						
+						createPhaseImage( index);
+						
+						ovlCanvas.graphics.lineStyle( 2, 0xffffff00);
+						ovlCanvas.graphics.drawCircle( centerx*estSquare*4, centery*estSquare*4, 4*varianz);
+						
+						setAvgDisplay( false);
+					}				
+				}
+				
+//				trace( varianz+" / "+dTrig+" / "+min+" / "+tavg+" / "+max);
+				
+				return dest;				
+			}
+			
+			protected function createPhaseImage( index:int):void {
+				var temp:BitmapData = new BitmapData( replayImage.bitmapData.width, replayImage.bitmapData.height);
+				temp.draw( stills[ index].bitmapData);
+/*				
+				var rAll:Rectangle = new Rectangle( 0, 0, replayImage.bitmapData.width, replayImage.bitmapData.height);
+				
+				var scale:uint = 64;
+				var delta:int = 2;
+
+				for( var j:int = Math.max( 0, index-delta); j <= Math.min( filmStripLength-1, index+delta); j++) {
+//					if ( j == index) continue;
+//					temp.merge( stills[ j].bitmapData, new Rectangle( 0, 0, 320, 240), new Point( 0, 0), scale, scale, scale, 256);
+					temp.draw( stills[ j].bitmapData, null, null, BlendMode.DIFFERENCE, rAll, false);
+				}
+//				scale = 200;
+//				temp.merge( stills[ index].bitmapData, new Rectangle( 0, 0, 320, 240), new Point( 0, 0), scale, scale, scale, 256);
+*/
+				replayImage.bitmapData = temp;
+			}			
+		]]>
+	</mx:Script>
+	<mx:VBox height="100%" width="100%">
+		<mx:HDividedBox width="100%" height="280" horizontalGap="10">
+			<mx:Panel width="340" height="280" layout="absolute" title="Live">
+				<mx:Canvas x="0" y="0" width="320" height="240" id="live">
+				</mx:Canvas>
+			</mx:Panel>
+			<mx:HDividedBox height="100%" horizontalGap="10">
+				<mx:Panel x="49" y="45" width="100%" height="100%" layout="absolute" title="Settings">
+					<mx:VBox width="100%" horizontalGap="5" height="100%">
+						<mx:Form width="100%" height="100%" paddingBottom="5" paddingLeft="10" paddingRight="10" paddingTop="5">
+							<mx:FormItem label="Trigger" toolTip="Activity needed to trigger recording.">
+								<mx:HSlider id="slTrigger" minimum="0" maximum="0.8" tickInterval="0.05" change="ACTIVITYTRIGGER=slTrigger.value;" snapInterval="0.05"/>
+							</mx:FormItem>
+							<mx:FormItem label="min. Motion">
+								<mx:HSlider id="slMotion"  minimum="0" maximum="0.8" tickInterval="0.05" change="MOTIONTRIGGER=slMotion.value;" snapInterval="0.05" toolTip="Change needed to mark a pixel as moving."/>
+							</mx:FormItem>
+							<mx:FormItem label="max. Variance">
+								<mx:HSlider id="slVarianz" minimum="1" maximum="15" tickInterval="1" change="VARIANZTRIGGER=slVarianz.value;" snapInterval="0.5" toolTip="Max. variance allowed to be measured."/>
+							</mx:FormItem>
+							<mx:FormItem label="Postroll:">
+								<mx:HSlider id="postRun" minimum="5" maximum="15" tickInterval="1"  snapInterval="1">
+									<mx:toolTip>Frames to record after motion below record trigger.</mx:toolTip>
+								</mx:HSlider>
+								<mx:CheckBox label="smooth deltas" id="cbSmooth" selected="true"/>
+							</mx:FormItem>
+							<mx:FormItem label="Measure:" horizontalAlign="right">
+								<mx:Spacer/>
+							</mx:FormItem>
+							<mx:FormItem label="Height">
+								<mx:TextInput id="tiHeight" />
+							</mx:FormItem>
+							<mx:FormItem label="Scale">
+								<mx:HSlider id="heightScale" minimum="5" maximum="20" tickInterval="1"  snapInterval="0.25" toolTip="Image-height translated to measured height."/>
+							</mx:FormItem>
+							<mx:FormItem label="Offset" >
+								<mx:HSlider id="heightOffset" minimum="0" maximum="5" tickInterval="0.5"  snapInterval="0.25" toolTip="Height we see belo &quot;zero&quot;-height."/>
+							</mx:FormItem>
+						</mx:Form>
+					</mx:VBox>
+				</mx:Panel>
+					<mx:Panel x="386" y="-31" width="340" height="280" layout="absolute" title="Replay">
+							<mx:Canvas x="0" y="0" width="320" height="240" id="replay">
+							</mx:Canvas>
+					</mx:Panel>
+			</mx:HDividedBox>
+		</mx:HDividedBox>
+		<mx:Panel width="100%" height="180" layout="absolute" title="FilmStrip" id="stripContainer">
+			<mx:Canvas x="0" y="0" width="800" height="120" id="filmStrip">
+			</mx:Canvas>
+		</mx:Panel>
+	</mx:VBox>
+</mx:Canvas>

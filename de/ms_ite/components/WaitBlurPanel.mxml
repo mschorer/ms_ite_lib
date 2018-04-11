@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas 
+	xmlns:mx="http://www.adobe.com/2006/mxml"
+	width="100%" height="100%"
+	backgroundAlpha="0.4"
+	borderColor="#000000"
+	backgroundColor="#FFFFFF" color="#FFFFFF">
+	<mx:Script>
+		<![CDATA[
+			import mx.core.UIComponent;
+			
+			protected var df:BlurFilter = new BlurFilter();
+			public var contentPane:UIComponent;
+			
+			override public function set visible( state:Boolean):void {
+				if ( contentPane != null) {
+					if ( state) contentPane.filters = [ df];
+					else contentPane.filters = [];
+				}
+				
+				super.visible = state;
+			}
+		]]>
+	</mx:Script>
+	<mx:Panel layout="vertical" horizontalCenter="0" verticalCenter="0" title="please wait ..." color="#000000" paddingBottom="4" paddingLeft="4" paddingRight="4" paddingTop="4" horizontalGap="0" verticalGap="0" verticalAlign="middle" horizontalAlign="center" borderAlpha="0.6">
+		<mx:ProgressBar label="" indeterminate="true" labelPlacement="center" fontSize="6" alpha="0.8"/>
+	</mx:Panel>
+</mx:Canvas>

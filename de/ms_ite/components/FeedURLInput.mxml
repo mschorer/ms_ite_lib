@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel
+	xmlns:fx="http://ns.adobe.com/mxml/2009" 
+	xmlns:s="library://ns.adobe.com/flex/spark" 
+	xmlns:mx="library://ns.adobe.com/flex/mx"
+	xmlns:ds="com.darronschall.effects.*" 
+	width="300"
+	title="Add Feed-URL:"
+	borderAlpha="0.8" cornerRadius="4">
+	<s:layout>
+		<s:VerticalLayout paddingLeft="2" paddingRight="2" paddingBottom="2"/>
+	</s:layout>
+	<fx:Metadata>
+		[Event(name=Event.CANCEL, type="Event")]
+		[Event(name=Event.CHANGE, type="Event")]		
+	</fx:Metadata>
+	<fx:Script>
+		<![CDATA[
+		
+			import com.darronschall.effects.*;
+			
+			public var errorColor:int = 0xDA843E;
+			public var successColor:int = 0x3BD050;
+			public var actColor:int;
+			
+			protected var timeout:Timer;
+			
+			protected function setTimeout():void {
+				if ( timeout == null) {
+					timeout = new Timer( 1000, 4);
+					timeout.addEventListener(TimerEvent.TIMER_COMPLETE, handleHide);
+				}
+				timeout.stop();
+				timeout.reset();
+				timeout.start();
+			}
+			protected function handleCancel( evt:Event):void {
+				dispatchEvent( new Event( Event.CANCEL));
+				visible = false;
+//				currentState = 'hidden';
+			}
+			
+			protected function handleAdd( evt:Event):void {
+				dispatchEvent( new Event( Event.CHANGE));	
+			}
+			
+			protected function handleChange( evt:Event):void {
+				// require http://123.12
+				bAdd.enabled = ( feedURL.text.length > 13); 
+			}
+			
+			public function get url():String {
+				return feedURL.text;
+			} 
+			
+			public function set url( url:String):void {
+				feedURL.text = url;
+			} 
+
+			public function set message( msg:String):void {
+				taMessage.text = msg;
+			}
+			
+			override public function set enabled( state:Boolean):void {
+				actColor = getStyle( 'borderColor');
+//				if ( state) currentState = 'init';
+//				else currentState = 'hidden';
+				debug( "enabled: "+state+" / "+currentState);
+				
+				super.enabled = state;
+				visible = state;
+			}
+			
+			public function displayError( url:String, msg:String):void {
+				this.url = url;
+				message = msg;
+				visible = true;
+				
+				debug( "error: "+url+" / "+msg);
+				setTimeout();
+			}
+
+			public function closeSuccess( msg:String):void {
+				message = msg;
+				actColor = getStyle( 'borderColor');
+//				currentState = 'success';
+				debug( "success: "+msg);
+				setTimeout();
+			}
+			
+			public function handleHide( evt:Event):void {
+				actColor = getStyle( 'borderColor');
+//				currentState = 'hidden';
+				visible = false;
+			}
+			
+			protected function debug( txt:String):void {
+				trace( "DBG : "+txt);
+			}
+		]]>
+	</fx:Script>
+	<mx:Form width="100%" paddingBottom="2" paddingLeft="2" paddingRight="2" paddingTop="2" borderVisible="false">
+		<mx:FormItem label="URL:" width="100%">
+			<mx:TextInput width="100%" id="feedURL" enter="handleAdd( event);" change="handleChange( event);" fontSize="9"/>
+		</mx:FormItem>
+	</mx:Form>
+	<s:TextArea width="100%" id="taMessage" editable="false" selectable="false" fontSize="9" height="40" borderVisible="false"/>
+	<s:HGroup width="100%">
+		<s:Button label="Cancel" id="bCancel" click="handleCancel( event);"/>
+		<s:Button label="Add!" click="handleAdd( event);" id="bAdd"/>
+	</s:HGroup>
+</s:Panel>

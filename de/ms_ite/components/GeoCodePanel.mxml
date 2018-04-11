@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox xmlns:mx="http://www.adobe.com/2006/mxml"
+	creationComplete="buildUI();" 
+	width="100%" 
+	height="100%" 
+	horizontalGap="5">
+<mx:RemoteObject id="geocoder" fault="faultHandler(event)" showBusyCursor="true" source="GeoMetaServiceGOgrafx" destination="amfphp">
+    <mx:method name="geoSearch" result="handleGeoCodeResult(event)" />
+    <mx:method name="mapSurface" result="handleGeoCodeResult(event)" />
+</mx:RemoteObject>
+
+<mx:Script>
+        <![CDATA[
+        	import de.ms_ite.components.TableSheet;
+        	import de.ms_ite.maptech.symbols.*;
+        	import de.ms_ite.tools.*;
+        	
+        	import mx.core.*;
+            import mx.events.*;
+            import mx.containers.*;
+        	import mx.controls.*;
+        	import mx.controls.dataGridClasses.*;
+			import mx.managers.*;
+        	import mx.collections.*;
+            import mx.rpc.events.ResultEvent;
+            import mx.rpc.events.FaultEvent;
+            import mx.utils.ArrayUtil;
+            import flash.events.*;
+        	
+        	public var _columns:Array;
+        	public var _cols_out_point:Array;
+        	public var _cols_out_geom:Array;
+        	
+        	public var _sheet:TableSheet;
+        	
+        	protected var isCoding:Boolean = false;
+			protected var searchReq:Array;        	
+        	protected var _cache:IServiceCache = null;
+        	
+        	protected var gcService:String = 'google';
+			protected var progMeter:ProgressPanel;
+			
+			protected var currentRow:Object;
+			protected var rqList:Array;
+			protected var rqMax:int;
+			
+			protected var _stack:TableSheetStack;
+        	
+        	public function buildUI():void {
+        		var dpMethods:Array = new Array();
+        		dpMethods.push( { data:'google', label:'Point'});
+        		dpMethods.push( { data:'zip', label:'ZIP-Area'});
+//        		dpMethods.push( { data:'iso', label:'Country'});
+        		
+        		cbCoder.dataProvider = dpMethods;
+
+				progMeter = new ProgressPanel();
+				progMeter.source = this;
+				
+				rqList = new Array();
+				rqMax = 0;
+				
+				sheet = null;
+        	}
+        	
+        	public function changeMethod( evt:Event):void {
+        		gcService = cbCoder.selectedItem.data;
+        		debug( "switching to: "+gcService);
+        	}
+        	
+        	public function set sheet( s:TableSheet):void {
+        		debug( "sheet: "+s);
+        		if ( isCoding) return;
+        		
+        		_sheet = s;
+        		if ( (_sheet != null) ? ( _sheet.table.columns.length > 0) : false) {
+        			columns = _sheet.table.columns;
+        			
+        			outPane.enabled = inPane.enabled = true;
+        		} else {
+        			outPane.enabled = inPane.enabled = false;
+        		}
+        	}
+        	
+        	public function get sheet():TableSheet {
+        		return _sheet;
+        	}
+        	
+        	public function set stack( st:TableSheetStack):void {
+        		
+        		if ( _stack == st) return;
+        		
+        		if ( _stack != null) _stack.removeEventListener( Event.CHANGE, handleStackChanged); 
+        		_stack = st;
+        		_stack.addEventListener( Event.CHANGE, handleStackChanged);
+        	}
+
+        	public function get stack():TableSheetStack {
+        		return _stack;
+        	}
+        	
+        	protected function handleStackChanged( evt:Event):void {
+        		sheet = _stack.topSheet;
+        		columns = (_stack.topSheet != null) ? _stack.topSheet.table.columns : null;
+        	}
+        	
+        	public function set columns( c:Array):void {
+        		debug( "columns: "+c);
+        		if ( isCoding) return;
+
+        		_columns = new Array();
+        		
+        		_cols_out_point = new Array();
+        		_cols_out_point.push( 'New: location');
+        		
+        		_cols_out_geom = new Array();
+        		_cols_out_geom.push( 'New: geometry');
+
+				if ( c != null) {
+	        		for( var i:int=0; i < c.length; i++) {
+	        			var temp:String = DataGridColumn( c[ i]).headerText;
+	        			_columns.push( temp);
+	        		}
+    			}
+        		
+        		_cols_out_point = _cols_out_point.concat( _columns);
+        		selOutPoint.dataProvider=_cols_out_point;
+        		
+        		_cols_out_geom = _cols_out_geom.concat( _columns);
+        		selOutGeom.dataProvider=_cols_out_geom;
+
+				_columns.unshift( '-- off --');
+        		selCountry.dataProvider=_columns;
+        		selCity.dataProvider=_columns;
+        		selZIP.dataProvider=_columns;
+			}
+        	
+        	public function get columns():Array {
+        		var temp:Array = new Array;
+        		
+        		if ( selCountry.selectedItem != '-- off --') temp.push( selCountry.selectedItem);
+        		if ( selCity.selectedItem != '-- off --') temp.push( selCity.selectedItem);
+        		if ( selZIP.selectedItem != '-- off --') temp.push( selZIP.selectedItem);
+
+        		return temp;
+        	}
+        	
+        	public function get output():String {
+        		return selOutPoint.selectedItem as String;
+        	}
+        	
+        	public function set cache( c:IServiceCache):void {
+        		if ( _cache != null) {
+        			_cache.removeEventListener( Event.COMPLETE, cacheArrived);
+        			_cache.removeEventListener( Event.ADDED, cacheUpdated);
+        		}
+        		_cache = c;
+        		if ( _cache != null) {
+        			_cache.addEventListener( Event.COMPLETE, cacheArrived);
+        			_cache.addEventListener( Event.ADDED, cacheUpdated);
+        		}
+        	}
+        	
+        	protected function go(evt:Event):void {
+				debug( "geoCode.");
+				
+				progMeter.reset();
+				PopUpManager.addPopUp( progMeter, _sheet, false);
+				PopUpManager.centerPopUp( progMeter);
+
+            	if ( gcService != 'google' && selOutGeom.selectedIndex == 0) _sheet.addColumn( 'geometry');
+            	if ( selOutPoint.selectedIndex == 0) _sheet.addColumn( 'location');
+            	
+            	if ( cbSelOnly.selected) rqList = _sheet.table.selectedItems.concat();
+            	else rqList = _sheet.dataProvider.toArray();
+            	rqMax = rqList.length;
+				
+            	if ( rqList.length == 0) codingDone();
+            	else triggerGeoCodeRow();
+			}
+			
+			protected function triggerGeoCodeRow():void {
+				
+				isCoding = true;
+
+				currentRow = rqList.shift();				
+        		var rqCountry:String = ( selCountry.selectedItem != '-- off --') ? currentRow[ selCountry.selectedItem] : '';
+        		var rqCity:String = ( selCity.selectedItem != '-- off --') ? currentRow[ selCity.selectedItem] : '';
+        		var rqZIP:String = ( selZIP.selectedItem != '-- off --') ? currentRow[ selZIP.selectedItem] : '';
+
+//				geocoder.getOperation('geoSearch').send( 'google', '', 0, 100, unified, '', '', '', '');
+
+				searchReq = new Array();
+				switch( gcService) {
+					case 'google':  searchReq.push( rqCountry);
+						searchReq.push( rqZIP);
+						searchReq.push( rqCity);
+					break;
+					
+					case 'iso': searchReq.push( rqCountry);
+					break;
+					
+					case 'zip': searchReq.push( rqCountry);
+						searchReq.push( rqZIP); 
+					break;
+					
+					break;					
+				}
+
+				debug( "geoCode: "+searchReq);
+
+				if ( _cache != null) _cache.getCached( 'geoCode:'+gcService, searchReq);
+				else doGeocode( searchReq);
+			}
+			
+			protected function cacheArrived( evt:Event):void {
+				var res:Array = _cache.getResult();
+				debug( "cached: "+(( res != null) ? 'yes' : 'no'));
+				if ( res != null) handleResult( res);
+				else doGeocode( searchReq);
+			}
+			
+			protected function doGeocode( srq:Array):void {
+				debug( "use: "+gcService);
+				switch( gcService) {
+					case 'iso':
+						geocoder.getOperation('mapSurface').send( gcService, '', 0, 100, srq[0], '');
+					break;
+					
+					case 'zip':
+						geocoder.getOperation('mapSurface').send( gcService, '', 0, 100, srq[0], srq[1]);
+					break;
+					
+					case 'google':
+						geocoder.getOperation('geoSearch').send( gcService, '', 0, 100, srq.join( ' '), '', '', '', '');
+					default:
+				}
+			}
+			
+            private function handleGeoCodeResult(evt:ResultEvent):void {
+            	debug( "rx: "+evt.result);
+            	
+            	if ( _cache != null && ((evt.result != null) ? (evt.result.length > 0) : false)) {
+            		_cache.insertCall( 'geoCode:'+gcService, searchReq, evt.result);
+            	} else handleResult( evt.result as Array);
+            }
+            	
+			protected function cacheUpdated( evt:Event):void {
+//				debug( "cache updated");
+				handleResult( _cache.getResult());
+			}
+			
+            protected function handleResult( res:Array):void {
+//            	var obj:Object = _sheet.table.dataProvider[ rowIndex];
+            	var row:Object = currentRow;
+
+				// copy row if we add a column
+/*            	if ( selOutPoint.selectedItem.indexOf( 'New:') >= 0 || selOutGeom.selectedItem.indexOf( 'New:') >= 0) {
+					var myBA:ByteArray = new ByteArray();
+				    myBA.writeObject(obj);
+				    myBA.position = 0;
+					row = myBA.readObject();
+            	} else row = obj;
+*/            	
+            	// setup data
+            	var gc:Object = null;
+				if (( res != null) ? (res.length > 0) : false) {
+					gc = res[ 0];
+            		debug( "coded: "+gc.q+" @ "+gc.location+" / "+gc.geometry);
+				} 
+				if ( gc == null) {
+					debug( "  !coded.");
+					gc = new Object();
+					gc.location = '';
+					gc.geometry = '';
+				}
+					
+            	if ( selOutPoint.selectedItem.indexOf( 'New:') >= 0 && gc.hasOwnProperty( 'location')) {
+        			row.location = gc.location;
+            	} else {
+					row[ selOutPoint.selectedItem] = gc.location;
+				}
+	           	
+	           	if ( gcService != 'google') {
+	            	if ( selOutGeom.selectedItem.indexOf( 'New:') >= 0 && gc.hasOwnProperty( 'geometry')) {
+	        			row.geometry = gc.geometry;
+	            	} else {
+						row[ selOutGeom.selectedItem] = gc.geometry;
+					}
+	           	}
+	           	
+	           	_sheet.dataProvider.itemUpdated( row);            	
+//            	debug( "progress: "+rowIndex+" / "+_sheet.dataProvider.length);
+				var pev:ProgressEvent = new ProgressEvent( ProgressEvent.PROGRESS);
+				pev.bytesTotal = bytesTotal;
+				pev.bytesLoaded = bytesLoaded; 
+				dispatchEvent( pev);
+            	
+            	if ( rqList.length == 0) codingDone();
+            	else triggerGeoCodeRow();
+            }			
+            
+            protected function codingDone():void {
+           		PopUpManager.removePopUp( progMeter);
+        		debug( "complete");
+				isCoding = false;
+				rqMax = 0;
+				
+        		dispatchEvent( new Event( Event.COMPLETE));         
+            }
+
+            private function faultHandler(fault:FaultEvent):void {
+            	debug( "err: "+fault);
+           		PopUpManager.removePopUp( progMeter);
+                CursorManager.removeBusyCursor();
+                debug( "code:\n" + fault.fault.faultCode + "\n\nMessage:\n" + fault.fault.faultString + "\n\nDetail:\n" + fault.fault.faultDetail);
+            }
+
+			public function get bytesLoaded():Number {
+				return ( rqMax - rqList.length);
+			}
+			
+			public function get bytesTotal():Number {
+				return rqMax;
+			}
+			
+			protected function debug( txt:String):void {
+				trace( "DBG GRP: "+txt);
+			}
+        ]]>
+    </mx:Script>
+		<mx:VBox width="50%" height="100%" id="inPane">
+			<mx:Form width="100%" height="100%" paddingBottom="5" paddingLeft="5" paddingRight="5" paddingTop="5">
+				<mx:FormItem label="Coding to" fontWeight="bold">
+					<mx:ComboBox id="cbCoder" change="changeMethod( event);" width="100"></mx:ComboBox>
+				</mx:FormItem>
+				<mx:FormItem label="Input columns:" width="207" fontWeight="bold">
+				</mx:FormItem>
+				<mx:FormItem label="Country-Code">
+					<mx:ComboBox id="selCountry" toolTip="Select column to hold country-code." width="100"></mx:ComboBox>
+				</mx:FormItem>
+				<mx:FormItem label="City">
+					<mx:ComboBox id="selCity" toolTip="Select column to hold city name." width="100"></mx:ComboBox>
+				</mx:FormItem>
+				<mx:FormItem label="ZIP" toolTip="Select column to hold ZIP code.">
+					<mx:ComboBox id="selZIP" width="100"></mx:ComboBox>
+				</mx:FormItem>
+			</mx:Form>
+		</mx:VBox>
+		<mx:VBox width="50%" height="100%" verticalAlign="top" horizontalAlign="right" id="outPane" paddingBottom="2" paddingRight="2">
+			<mx:Form width="100%" height="100%" paddingBottom="5" paddingLeft="5" paddingRight="5" paddingTop="5">
+				<mx:FormHeading label="Output Columns:" fontSize="10"/>
+				<mx:FormItem label="Location" horizontalAlign="left" width="230">
+					<mx:ComboBox id="selOutPoint" toolTip="Column to write location information."></mx:ComboBox>
+				</mx:FormItem>
+				<mx:FormItem label="Area" horizontalAlign="left" width="230">
+					<mx:ComboBox id="selOutGeom" toolTip="Column to area location information."></mx:ComboBox>
+				</mx:FormItem>
+				<mx:FormItem label="geocode">
+					<mx:CheckBox label="selected only" id="cbSelOnly"/>
+				</mx:FormItem>
+			</mx:Form>
+			<mx:Button label="GeoCode" id="bGeoCode"  click="go( event);" toolTip="Start gecoding sheet."/>
+		</mx:VBox>
+</mx:HBox>
